@@ -3,16 +3,14 @@ using UnityEngine.Experimental.Rendering.HDPipeline;
 
 namespace UnityEditor.Experimental.Rendering.HDPipeline
 { 
-    partial class HDLightEditor
+    partial class HDLightUI
     {
-        protected override void OnSceneGUI()
+        public static void DrawHandles(SerializedHDLight serialized, Editor owner)
         {
-            m_SerializedAdditionalLightData.Update();
+            HDAdditionalLightData src = (HDAdditionalLightData)serialized.serializedLightDatas.targetObject;
+            Light light = (Light)owner.target;
 
-            HDAdditionalLightData src = (HDAdditionalLightData)m_SerializedAdditionalLightData.targetObject;
-            Light light = (Light)target;
-
-            Color wireframeColorAbove = light.enabled ? LightEditor.kGizmoLight : LightEditor.kGizmoDisabledLight;
+            Color wireframeColorAbove = (owner as HDLightEditor).legacyLightColor;
             Color handleColorAbove = CoreLightEditorUtilities.GetLightHandleColor(wireframeColorAbove);
             Color wireframeColorBehind = CoreLightEditorUtilities.GetLightBehindObjectWireframeColor(wireframeColorAbove);
             Color handleColorBehind = CoreLightEditorUtilities.GetLightHandleColor(wireframeColorBehind);
@@ -24,7 +22,8 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline
                     {
                         case LightType.Directional:
                         case LightType.Point:
-                            base.OnSceneGUI();  //use legacy handles
+                            //use legacy handles for those cases:
+                            //See HDLightEditor
                             break;
                         case LightType.Spot:
                             switch (src.spotLightShape)
@@ -48,7 +47,7 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline
                                         outterAngleInnerAngleRange = CoreLightEditorUtilities.DrawSpotlightHandle(outterAngleInnerAngleRange);
                                         if (EditorGUI.EndChangeCheck())
                                         {
-                                            Undo.RecordObjects(new UnityEngine.Object[] { target, src }, "Adjust Cone Spot Light");
+                                            Undo.RecordObjects(new UnityEngine.Object[] { light, src }, "Adjust Cone Spot Light");
                                             src.m_InnerSpotPercent = 100f * outterAngleInnerAngleRange.y / outterAngleInnerAngleRange.x;
                                             light.spotAngle = outterAngleInnerAngleRange.x;
                                             light.range = outterAngleInnerAngleRange.z;
@@ -76,7 +75,7 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline
                                         aspectFovMaxRangeMinRange = CoreLightEditorUtilities.DrawPyramidFrustumHandle(aspectFovMaxRangeMinRange, false);
                                         if (EditorGUI.EndChangeCheck())
                                         {
-                                            Undo.RecordObjects(new UnityEngine.Object[] { target, src }, "Adjust Pyramid Spot Light");
+                                            Undo.RecordObjects(new UnityEngine.Object[] { light, src }, "Adjust Pyramid Spot Light");
                                             src.aspectRatio = aspectFovMaxRangeMinRange.x;
                                             light.spotAngle = aspectFovMaxRangeMinRange.y;
                                             light.range = aspectFovMaxRangeMinRange.z;
@@ -104,7 +103,7 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline
                                         widthHeightMaxRangeMinRange = CoreLightEditorUtilities.DrawOrthoFrustumHandle(widthHeightMaxRangeMinRange, false);
                                         if (EditorGUI.EndChangeCheck())
                                         {
-                                            Undo.RecordObjects(new UnityEngine.Object[] { target, src }, "Adjust Box Spot Light");
+                                            Undo.RecordObjects(new UnityEngine.Object[] { light, src }, "Adjust Box Spot Light");
                                             src.shapeWidth = widthHeightMaxRangeMinRange.x;
                                             src.shapeHeight = widthHeightMaxRangeMinRange.y;
                                             light.range = widthHeightMaxRangeMinRange.z;
@@ -122,7 +121,7 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline
                     bool withYAxis = src.lightTypeExtent == LightTypeExtent.Rectangle;
                     using (new Handles.DrawingScope(Matrix4x4.TRS(light.transform.position, light.transform.rotation, Vector3.one)))
                     {
-                        Vector2 widthHeight = new Vector4(light.areaSize.x, withYAxis ? light.areaSize.y : 0f);
+                        Vector2 widthHeight = new Vector4(src.shapeWidth, withYAxis ? src.shapeHeight : 0f);
                         float range = light.range;
                         EditorGUI.BeginChangeCheck();
                         Handles.zTest = UnityEngine.Rendering.CompareFunction.Greater;
@@ -141,8 +140,12 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline
                         widthHeight = CoreLightEditorUtilities.DrawAreaLightHandle(widthHeight, withYAxis);
                         if (EditorGUI.EndChangeCheck())
                         {
-                            Undo.RecordObjects(new UnityEngine.Object[] { target, src }, withYAxis ? "Adjust Area Rectangle Light" : "Adjust Area Tube Light");
-                            light.areaSize = withYAxis ? widthHeight : new Vector2(widthHeight.x, light.areaSize.y);
+                            Undo.RecordObjects(new UnityEngine.Object[] { light, src }, withYAxis ? "Adjust Area Rectangle Light" : "Adjust Area Tube Light");
+                            src.shapeWidth = widthHeight.x;
+                            if (withYAxis)
+                            {
+                                src.shapeHeight = widthHeight.y;
+                            }
                             light.range = range;
                         }
 
@@ -152,13 +155,10 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline
             }
         }
 
-
         [DrawGizmo(GizmoType.Selected)]
         static void DrawGizmoForHDAdditionalLightData(HDAdditionalLightData src, GizmoType gizmoType)
         {
             var light = src.gameObject.GetComponent<Light>();
-            Color previousColor = Gizmos.color;
-            Gizmos.color = light.enabled ? LightEditor.kGizmoLight : LightEditor.kGizmoDisabledLight;
 
             if (light.type != LightType.Directional)
             {
@@ -182,8 +182,6 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline
                     }
                 }
             }
-
-            Gizmos.color = previousColor;
         }
     }
 }

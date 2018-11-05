@@ -5,7 +5,7 @@ using UnityEngine;
 namespace UnityEditor.Experimental.Rendering.HDPipeline
 {
     // TODO: Missing UI tooltips
-    partial class HDLightEditor
+    partial class HDLightUI
     {
         sealed class Styles
         {
@@ -79,20 +79,12 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline
 
             public Styles()
             {
-                shapeNames = Enum.GetNames(typeof(LightShape))
+                shapeNames = Enum.GetNames(typeof(HDLightUI.LightShape))
                     .Select(x => new GUIContent(x))
                     .ToArray();
             }
         }
 
-        static Styles s_Styles;
-
-        // Can't use a static initializer in case we need to create GUIStyle in the Styles class as
-        // these can only be created with an active GUI rendering context
-        void CheckStyles()
-        {
-            if (s_Styles == null)
-                s_Styles = new Styles();
-        }
+        static Styles s_Styles = new Styles();
     }
 }

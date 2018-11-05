@@ -1,11 +1,14 @@
 using UnityEngine.Experimental.Rendering;
 using UnityEngine.Experimental.Rendering.HDPipeline;
+using UnityEngine;
+using UnityEngine.Rendering;
 
 namespace UnityEditor.Experimental.Rendering.HDPipeline
 {
-    partial class HDLightEditor
+    using LightShape = HDLightUI.LightShape;
+    internal class SerializedHDLight
     {
-        sealed class SerializedLightData
+        public sealed class SerializedLightData
         {
             public SerializedProperty intensity;
             public SerializedProperty enableSpotReflector;
@@ -40,7 +43,7 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline
             public SerializedProperty showAdditionalSettings;
         }
 
-        sealed class SerializedShadowData
+        public sealed class SerializedShadowData
         {
             public SerializedProperty shadowDimmer;
             public SerializedProperty volumetricShadowDimmer;
@@ -61,22 +64,28 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline
             public SerializedProperty edgeTolerance;
         }
 
-        SerializedObject m_SerializedAdditionalLightData;
-        SerializedObject m_SerializedAdditionalShadowData;
+        public bool needUpdateAreaLightEmissiveMeshComponents = false;
 
-        SerializedLightData m_AdditionalLightData;
-        SerializedShadowData m_AdditionalShadowData;
+        public SerializedObject serializedLightDatas;
+        public SerializedObject serializedShadowDatas;
 
-        void InitSerializedData()
+        public SerializedLightData serializedLightData;
+        public SerializedShadowData serializedShadowData;
+
+        //contain serialized property that are mainly used to draw inspector
+        public LightEditor.Settings settings;
+        
+        // Used for UI only; the processing code must use LightTypeExtent and LightType
+        public LightShape editorLightShape;
+
+        public SerializedHDLight(HDAdditionalLightData[] lightDatas, AdditionalShadowData[] shadowDatas, LightEditor.Settings settings)
         {
-            // Get & automatically add additional HD data if not present
-            m_AdditionalLightDatas = CoreEditorUtils.GetAdditionalData<HDAdditionalLightData>(targets, HDAdditionalLightData.InitDefaultHDAdditionalLightData);
-            m_AdditionalShadowDatas = CoreEditorUtils.GetAdditionalData<AdditionalShadowData>(targets, HDAdditionalShadowData.InitDefaultHDAdditionalShadowData);
-            m_SerializedAdditionalLightData = new SerializedObject(m_AdditionalLightDatas);
-            m_SerializedAdditionalShadowData = new SerializedObject(m_AdditionalShadowDatas);
+            serializedLightDatas = new SerializedObject(lightDatas);
+            serializedShadowDatas = new SerializedObject(shadowDatas);
+            this.settings = settings;
 
-            using (var o = new PropertyFetcher<HDAdditionalLightData>(m_SerializedAdditionalLightData))
-                m_AdditionalLightData = new SerializedLightData
+            using (var o = new PropertyFetcher<HDAdditionalLightData>(serializedLightDatas))
+                serializedLightData = new SerializedLightData
                 {
                     intensity = o.Find(x => x.displayLightIntensity),
                     enableSpotReflector = o.Find(x => x.enableSpotReflector),
@@ -112,8 +121,8 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline
                 };
 
             // TODO: Review this once AdditionalShadowData is refactored
-            using (var o = new PropertyFetcher<AdditionalShadowData>(m_SerializedAdditionalShadowData))
-                m_AdditionalShadowData = new SerializedShadowData
+            using (var o = new PropertyFetcher<AdditionalShadowData>(serializedShadowDatas))
+                serializedShadowData = new SerializedShadowData
                 {
                     shadowDimmer = o.Find(x => x.shadowDimmer),
                     volumetricShadowDimmer = o.Find(x => x.volumetricShadowDimmer),
@@ -132,6 +141,60 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline
                     edgeToleranceNormal = o.Find(x => x.edgeToleranceNormal),
                     edgeTolerance = o.Find(x => x.edgeTolerance)
                 };
+        }
+
+        public void Update()
+        {
+            serializedLightDatas.Update();
+            serializedShadowDatas.Update();
+            settings.Update();
+
+            ResolveLightShape();
+        }
+
+        public void Apply()
+        {
+            serializedLightDatas.ApplyModifiedProperties();
+            serializedShadowDatas.ApplyModifiedProperties();
+            settings.ApplyModifiedProperties();
+        }
+
+        void ResolveLightShape()
+        {
+            var type = settings.lightType;
+
+            // Special case for multi-selection: don't resolve light shape or it'll corrupt lights
+            if (type.hasMultipleDifferentValues
+                || serializedLightData.lightTypeExtent.hasMultipleDifferentValues)
+            {
+                editorLightShape = (LightShape)(-1);
+                return;
+            }
+
+            var lightTypeExtent = (LightTypeExtent)serializedLightData.lightTypeExtent.enumValueIndex;
+            switch (lightTypeExtent)
+            {
+                case LightTypeExtent.Punctual:
+                    switch ((LightType)type.enumValueIndex)
+                    {
+                        case LightType.Directional:
+                            editorLightShape = LightShape.Directional;
+                            break;
+                        case LightType.Point:
+                            editorLightShape = LightShape.Point;
+                            break;
+                        case LightType.Spot:
+                            editorLightShape = LightShape.Spot;
+                            break;
+                    }
+                    break;
+                case LightTypeExtent.Rectangle:
+                    editorLightShape = LightShape.Rectangle;
+                    break;
+                case LightTypeExtent.Tube:
+                    editorLightShape = LightShape.Tube;
+                    break;
+            }
         }
     }
 }

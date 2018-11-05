@@ -5,7 +5,7 @@ using UnityEngine.Experimental.Rendering.HDPipeline;
 
 namespace UnityEditor.Experimental.Rendering.HDPipeline
 {
-    partial class HDLightEditor
+    partial class HDLightUI
     {
         [MenuItem("CONTEXT/Light/Remove Component", false, 0)]
         static void RemoveLight(MenuCommand menuCommand)

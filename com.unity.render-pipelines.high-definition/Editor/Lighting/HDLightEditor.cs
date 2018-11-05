@@ -11,61 +11,24 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline
     [CustomEditorForRenderPipeline(typeof(Light), typeof(HDRenderPipelineAsset))]
     sealed partial class HDLightEditor : LightEditor
     {
+        public SerializedHDLight m_SerializedHDLight;
 
-
-        // LightType + LightTypeExtent combined
-        enum LightShape
-        {
-            Spot,
-            Directional,
-            Point,
-            //Area, <= offline base type not displayed in our case but used for GI of our area light
-            Rectangle,
-            Tube,
-            //Sphere,
-            //Disc,
-        }
-
-        enum DirectionalLightUnit
-        {
-            Lux = LightUnit.Lux,
-        }
-
-        enum AreaLightUnit
-        {
-            Lumen = LightUnit.Lumen,
-            Luminance = LightUnit.Luminance,
-            Ev100 = LightUnit.Ev100,
-        }
-
-        enum PunctualLightUnit
-        {
-            Lumen = LightUnit.Lumen,
-            Candela = LightUnit.Candela,
-        }
-
-        const float k_MinLightSize = 0.01f; // Provide a small size of 1cm for line light
-
-        // Used for UI only; the processing code must use LightTypeExtent and LightType
-        LightShape m_LightShape;
-
-        HDAdditionalLightData[]     m_AdditionalLightDatas;
-        AdditionalShadowData[]      m_AdditionalShadowDatas;
-
-        bool m_UpdateAreaLightEmissiveMeshComponents = false;
-
-        HDShadowInitParameters                m_HDShadowInitParameters;
-        Dictionary<HDShadowQuality, Action>   m_ShadowAlgorithmUIs;
+        HDAdditionalLightData[] m_AdditionalLightDatas;
+        AdditionalShadowData[] m_AdditionalShadowDatas;
 
         protected override void OnEnable()
         {
             base.OnEnable();
 
-            InitSerializedData();
+            // Get & automatically add additional HD data if not present
+            m_AdditionalLightDatas = CoreEditorUtils.GetAdditionalData<HDAdditionalLightData>(targets, HDAdditionalLightData.InitDefaultHDAdditionalLightData);
+            m_AdditionalShadowDatas = CoreEditorUtils.GetAdditionalData<AdditionalShadowData>(targets, HDAdditionalShadowData.InitDefaultHDAdditionalShadowData);
+            m_SerializedHDLight = new SerializedHDLight(m_AdditionalLightDatas, m_AdditionalShadowDatas, settings);
 
             // Update emissive mesh and light intensity when undo/redo
-            Undo.undoRedoPerformed += () => {
-                m_SerializedAdditionalLightData.ApplyModifiedProperties();
+            Undo.undoRedoPerformed += () =>
+            {
+                m_SerializedHDLight.serializedLightDatas.ApplyModifiedProperties();
                 foreach (var hdLightData in m_AdditionalLightDatas)
                     if (hdLightData != null)
                         hdLightData.UpdateAreaLightEmissiveMesh();
@@ -74,20 +37,11 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline
             // If the light is disabled in the editor we force the light upgrade from his inspector
             foreach (var additionalLightData in m_AdditionalLightDatas)
                 additionalLightData.UpgradeLight();
-
-            m_HDShadowInitParameters = (GraphicsSettings.renderPipelineAsset as HDRenderPipelineAsset).renderPipelineSettings.hdShadowInitParams;
-            m_ShadowAlgorithmUIs = new Dictionary<HDShadowQuality, Action>
-            {
-                {HDShadowQuality.Low, DrawLowShadowSettings},
-                {HDShadowQuality.Medium, DrawMediumShadowSettings},
-                {HDShadowQuality.High, DrawHighShadowSettings}
-            };
         }
 
         public override void OnInspectorGUI()
         {
-            m_SerializedAdditionalLightData.Update();
-            m_SerializedAdditionalShadowData.Update();
+            m_SerializedHDLight.Update();
 
             //add space before the first collapsible area
             EditorGUILayout.Space();
@@ -114,20 +68,36 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline
 
             // New editor
             ApplyAdditionalComponentsVisibility(true);
-            CheckStyles();
 
-            settings.Update();
+            HDLightUI.Inspector.Draw(m_SerializedHDLight, this);
 
-            ResolveLightShape();
+            m_SerializedHDLight.Apply();
 
-            DrawInspector();
-
-            m_SerializedAdditionalShadowData.ApplyModifiedProperties();
-            m_SerializedAdditionalLightData.ApplyModifiedProperties();
-            settings.ApplyModifiedProperties();
-
-            if (m_UpdateAreaLightEmissiveMeshComponents)
+            if (m_SerializedHDLight.needUpdateAreaLightEmissiveMeshComponents)
                 UpdateAreaLightEmissiveMeshComponents();
+        }
+
+        void UpdateAreaLightEmissiveMeshComponents()
+        {
+            foreach (var hdLightData in m_AdditionalLightDatas)
+            {
+                hdLightData.UpdateAreaLightEmissiveMesh();
+
+                MeshRenderer emissiveMeshRenderer = hdLightData.GetComponent<MeshRenderer>();
+                MeshFilter emissiveMeshFilter = hdLightData.GetComponent<MeshFilter>();
+
+                // If the display emissive mesh is disabled, skip to the next selected light
+                if (emissiveMeshFilter == null || emissiveMeshRenderer == null)
+                    continue;
+
+                // We only load the mesh and it's material here, because we can't do that inside HDAdditionalLightData (Editor assembly)
+                // Every other properties of the mesh is updated in HDAdditionalLightData to support timeline and editor records
+                emissiveMeshFilter.mesh = HDEditorUtils.LoadAsset<Mesh>("Runtime/RenderPipelineResources/Mesh/Quad.FBX");
+                if (emissiveMeshRenderer.sharedMaterial == null)
+                    emissiveMeshRenderer.material = new Material(Shader.Find("HDRenderPipeline/Unlit"));
+            }
+
+            m_SerializedHDLight.needUpdateAreaLightEmissiveMeshComponents = false;
         }
 
         // Internal utilities
@@ -138,55 +108,37 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline
             // var flags = hide ? HideFlags.HideInInspector : HideFlags.None;
             var flags = HideFlags.None;
 
-            foreach (var t in m_SerializedAdditionalLightData.targetObjects)
+            foreach (var t in m_SerializedHDLight.serializedLightDatas.targetObjects)
                 ((HDAdditionalLightData)t).hideFlags = flags;
 
-            foreach (var t in m_SerializedAdditionalShadowData.targetObjects)
+            foreach (var t in m_SerializedHDLight.serializedShadowDatas.targetObjects)
                 ((AdditionalShadowData)t).hideFlags = flags;
         }
-
-        void ResolveLightShape()
+        
+        protected override void OnSceneGUI()
         {
-            var type = settings.lightType;
+            m_SerializedHDLight.Update();
 
-            // Special case for multi-selection: don't resolve light shape or it'll corrupt lights
-            if (type.hasMultipleDifferentValues
-                || m_AdditionalLightData.lightTypeExtent.hasMultipleDifferentValues)
+
+            HDAdditionalLightData src = (HDAdditionalLightData)m_SerializedHDLight.serializedLightDatas.targetObject;
+            Light light = (Light)target;
+            if (src.lightTypeExtent == LightTypeExtent.Punctual && (light.type == LightType.Directional || light.type == LightType.Point))
             {
-                m_LightShape = (LightShape)(-1);
+                //use legacy handles
+                base.OnSceneGUI();
                 return;
             }
 
-            var lightTypeExtent = (LightTypeExtent)m_AdditionalLightData.lightTypeExtent.enumValueIndex;
+            HDLightUI.DrawHandles(m_SerializedHDLight, this);
+        }
 
-            if (lightTypeExtent == LightTypeExtent.Punctual)
+        internal Color legacyLightColor
+        {
+            get
             {
-                switch ((LightType)type.enumValueIndex)
-                {
-                    case LightType.Directional:
-                        m_LightShape = LightShape.Directional;
-                        break;
-                    case LightType.Point:
-                        m_LightShape = LightShape.Point;
-                        break;
-                    case LightType.Spot:
-                        m_LightShape = LightShape.Spot;
-                        break;
-                }
+                Light light = (Light)target;
+                return light.enabled ? LightEditor.kGizmoLight : LightEditor.kGizmoDisabledLight;
             }
-            else
-            {
-                switch (lightTypeExtent)
-                {
-                    case LightTypeExtent.Rectangle:
-                        m_LightShape = LightShape.Rectangle;
-                        break;
-                    case LightTypeExtent.Tube:
-                        m_LightShape = LightShape.Tube;
-                        break;
-                }
-            }
-
         }
     }
 }
