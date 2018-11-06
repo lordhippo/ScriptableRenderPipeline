@@ -10,11 +10,13 @@ namespace UnityEditor.Experimental.Rendering
     {
         None = 0,
         Indent = 1 << 0,
-        Animate = 1 << 1,
+        [Obsolete("animated inspector does not been approved by UX team")]
+        Animate = 1 << 1,   
         Boxed = 1 << 2
     }
 
     [Flags]
+    [Obsolete("Will disappear with CoreEditorDrawer<TUIState, TData>")]
     public enum FadeOption
     {
         None = 0,
@@ -22,6 +24,7 @@ namespace UnityEditor.Experimental.Rendering
         Animate = 1 << 1
     }
 
+    [Obsolete("Prefer using the version without the UIState in coordination with a static ExpandedState")]
     public static class CoreEditorDrawer<TUIState, TData>
     {
         public interface IDrawer
@@ -255,12 +258,259 @@ namespace UnityEditor.Experimental.Rendering
         }
     }
 
+    /// <summary>
+    /// Utility class to draw inspectors
+    /// </summary>
+    /// <typeparam name="TData">Type of class containing data needed to draw inspector</typeparam>
+    public static class CoreEditorDrawer<TData>
+    {
+        /// <summary> Abstraction that have the Draw hability </summary>
+        public interface IDrawer
+        {
+            void Draw(TData p, Editor owner);
+        }
+        
+        public delegate T2Data DataSelect<T2Data>(TData d, Editor o);
+        public delegate void ActionDrawer(TData p, Editor owner);
+
+        /// <summary> Equivalent to EditorGUILayout.Space that can be put in a drawer group </summary>
+        public static readonly IDrawer space = Group((data, owner) => EditorGUILayout.Space());
+        
+        /// <summary>
+        /// Group of drawing function for inspector.
+        /// They will be drawn one after the other.
+        /// </summary>
+        public static IDrawer Group(params IDrawer[] drawers)
+        {
+            return new GroupDrawerInternal(-1f, drawers.Draw);
+        }
+
+        /// <summary>
+        /// Group of drawing function for inspector.
+        /// They will be drawn one after the other.
+        /// </summary>
+        public static IDrawer Group(params ActionDrawer[] drawers)
+        {
+            return new GroupDrawerInternal(-1f, drawers);
+        }
+
+        /// <summary> Group of drawing function for inspector with a set width for labels </summary>
+        /// <param name="labelWidth">Width used for all labels in the group</param>
+        /// <param name="drawers">The content of the group</param>
+        public static IDrawer Group(float labelWidth, params IDrawer[] drawers)
+        {
+            return new GroupDrawerInternal(labelWidth, drawers.Draw);
+        }
+
+        /// <summary> Group of drawing function for inspector with a set width for labels </summary>
+        /// <param name="labelWidth">Width used for all labels in the group</param>
+        /// <param name="drawers">The content of the group</param>
+        public static IDrawer Group(float labelWidth, params ActionDrawer[] drawers)
+        {
+            return new GroupDrawerInternal(labelWidth, drawers);
+        }
+        
+        class GroupDrawerInternal : IDrawer
+        {
+            ActionDrawer[] actionDrawers { get; set; }
+            float m_LabelWidth;
+            public GroupDrawerInternal(float labelWidth = -1f, params ActionDrawer[] actionDrawers)
+            {
+                this.actionDrawers = actionDrawers;
+                m_LabelWidth = labelWidth;
+            }
+
+            void IDrawer.Draw(TData p, Editor owner)
+            {
+                var currentLabelWidth = EditorGUIUtility.labelWidth;
+                if (m_LabelWidth >= 0f)
+                {
+                    EditorGUIUtility.labelWidth = m_LabelWidth;
+                }
+                for (var i = 0; i < actionDrawers.Length; i++)
+                    actionDrawers[i](p, owner);
+                if (m_LabelWidth >= 0f)
+                {
+                    EditorGUIUtility.labelWidth = currentLabelWidth;
+                }
+            }
+        }
+
+        /// <summary> Create an IDrawer based on an other data container </summary>
+        /// <param name="dataSelect">The data new source for the inner drawers</param>
+        /// <param name="otherDrawers">Inner drawers drawed with given data sources</param>
+        /// <returns></returns>
+        public static IDrawer Select<T2Data>(
+            DataSelect<T2Data> dataSelect,
+            params CoreEditorDrawer<T2Data>.IDrawer[] otherDrawers)
+        {
+            return new SelectDrawerInternal<T2Data>(dataSelect, otherDrawers.Draw);
+        }
+
+        /// <summary> Create an IDrawer based on an other data container </summary>
+        /// <param name="dataSelect">The data new source for the inner drawers</param>
+        /// <param name="otherDrawers">Inner drawers drawed with given data sources</param>
+        /// <returns></returns>
+        public static IDrawer Select<T2Data>(
+            DataSelect<T2Data> dataSelect,
+            params CoreEditorDrawer<T2Data>.ActionDrawer[] otherDrawers)
+        {
+            return new SelectDrawerInternal<T2Data>(dataSelect, otherDrawers);
+        }
+
+        class SelectDrawerInternal<T2Data> : IDrawer
+        {
+            DataSelect<T2Data> m_DataSelect;
+            CoreEditorDrawer<T2Data>.ActionDrawer[] m_SourceDrawers;
+
+            public SelectDrawerInternal(DataSelect<T2Data> dataSelect,
+                params CoreEditorDrawer<T2Data>.ActionDrawer[] otherDrawers)
+            {
+                m_SourceDrawers = otherDrawers;
+                m_DataSelect = dataSelect;
+            }
+
+            void IDrawer.Draw(TData p, Editor o)
+            {
+                var p2 = m_DataSelect(p, o);
+                for (var i = 0; i < m_SourceDrawers.Length; i++)
+                    m_SourceDrawers[i](p2, o);
+            }
+        }
+        
+        /// <summary>
+        /// Create an IDrawer foldout header using an ExpandedState.
+        /// The default option is Indent in this version.
+        /// </summary>
+        /// <param name="title">Title wanted for this foldout header</param>
+        /// <param name="mask">Bit mask (enum) used to define the boolean saving the state in ExpandedState</param>
+        /// <param name="state">The ExpandedState describing the component</param>
+        /// <param name="contentDrawer">The content of the foldout header</param>
+        public static IDrawer FoldoutGroup<TEnum, TState>(string title, TEnum mask, ExpandedState<TEnum, TState> state, params IDrawer[] contentDrawer)
+            where TEnum : struct, IConvertible
+        {
+            return FoldoutGroup(title, mask, state, contentDrawer.Draw);
+        }
+
+        /// <summary>
+        /// Create an IDrawer foldout header using an ExpandedState.
+        /// The default option is Indent in this version.
+        /// </summary>
+        /// <param name="title">Title wanted for this foldout header</param>
+        /// <param name="mask">Bit mask (enum) used to define the boolean saving the state in ExpandedState</param>
+        /// <param name="state">The ExpandedState describing the component</param>
+        /// <param name="contentDrawer">The content of the foldout header</param>
+        public static IDrawer FoldoutGroup<TEnum, TState>(string title, TEnum mask, ExpandedState<TEnum, TState> state, params ActionDrawer[] contentDrawer)
+            where TEnum : struct, IConvertible
+        {
+            return FoldoutGroup(CoreEditorUtils.GetContent(title), mask, state, contentDrawer);
+        }
+
+        /// <summary> Create an IDrawer foldout header using an ExpandedState </summary>
+        /// <param name="title">Title wanted for this foldout header</param>
+        /// <param name="mask">Bit mask (enum) used to define the boolean saving the state in ExpandedState</param>
+        /// <param name="state">The ExpandedState describing the component</param>
+        /// <param name="contentDrawer">The content of the foldout header</param>
+        public static IDrawer FoldoutGroup<TEnum, TState>(string title, TEnum mask, ExpandedState<TEnum, TState> state, FoldoutOption options, params IDrawer[] contentDrawer)
+            where TEnum : struct, IConvertible
+        {
+            return FoldoutGroup(title, mask, state, options, contentDrawer.Draw);
+        }
+
+        /// <summary> Create an IDrawer foldout header using an ExpandedState </summary>
+        /// <param name="title">Title wanted for this foldout header</param>
+        /// <param name="mask">Bit mask (enum) used to define the boolean saving the state in ExpandedState</param>
+        /// <param name="state">The ExpandedState describing the component</param>
+        /// <param name="contentDrawer">The content of the foldout header</param>
+        public static IDrawer FoldoutGroup<TEnum, TState>(string title, TEnum mask, ExpandedState<TEnum, TState> state, FoldoutOption options, params ActionDrawer[] contentDrawer)
+            where TEnum : struct, IConvertible
+        {
+            return FoldoutGroup(CoreEditorUtils.GetContent(title), mask, state, options, contentDrawer);
+        }
+
+        /// <summary>
+        /// Create an IDrawer foldout header using an ExpandedState.
+        /// The default option is Indent in this version.
+        /// </summary>
+        /// <param name="title">Title wanted for this foldout header</param>
+        /// <param name="mask">Bit mask (enum) used to define the boolean saving the state in ExpandedState</param>
+        /// <param name="state">The ExpandedState describing the component</param>
+        /// <param name="contentDrawer">The content of the foldout header</param>
+        public static IDrawer FoldoutGroup<TEnum, TState>(GUIContent title, TEnum mask, ExpandedState<TEnum, TState> state, params IDrawer[] contentDrawer)
+            where TEnum : struct, IConvertible
+        {
+            return FoldoutGroup(title, mask, state, contentDrawer.Draw);
+        }
+
+        /// <summary>
+        /// Create an IDrawer foldout header using an ExpandedState.
+        /// The default option is Indent in this version.
+        /// </summary>
+        /// <param name="title">Title wanted for this foldout header</param>
+        /// <param name="mask">Bit mask (enum) used to define the boolean saving the state in ExpandedState</param>
+        /// <param name="state">The ExpandedState describing the component</param>
+        /// <param name="contentDrawer">The content of the foldout header</param>
+        public static IDrawer FoldoutGroup<TEnum, TState>(GUIContent title, TEnum mask, ExpandedState<TEnum, TState> state, params ActionDrawer[] contentDrawer)
+            where TEnum : struct, IConvertible
+        {
+            return FoldoutGroup(title, mask, state, FoldoutOption.Indent, contentDrawer);
+        }
+
+        /// <summary> Create an IDrawer foldout header using an ExpandedState </summary>
+        /// <param name="title">Title wanted for this foldout header</param>
+        /// <param name="mask">Bit mask (enum) used to define the boolean saving the state in ExpandedState</param>
+        /// <param name="state">The ExpandedState describing the component</param>
+        /// <param name="contentDrawer">The content of the foldout header</param>
+        public static IDrawer FoldoutGroup<TEnum, TState>(GUIContent title, TEnum mask, ExpandedState<TEnum, TState> state, FoldoutOption options, params IDrawer[] contentDrawer)
+            where TEnum : struct, IConvertible
+        {
+            return FoldoutGroup(title, mask, state, options, contentDrawer.Draw);
+        }
+
+        /// <summary> Create an IDrawer foldout header using an ExpandedState </summary>
+        /// <param name="title">Title wanted for this foldout header</param>
+        /// <param name="mask">Bit mask (enum) used to define the boolean saving the state in ExpandedState</param>
+        /// <param name="state">The ExpandedState describing the component</param>
+        /// <param name="contentDrawer">The content of the foldout header</param>
+        public static IDrawer FoldoutGroup<TEnum, TState>(GUIContent title, TEnum mask, ExpandedState<TEnum, TState> state, FoldoutOption options, params ActionDrawer[] contentDrawer)
+        where TEnum : struct, IConvertible
+        {
+            return Group((data, editor) =>
+            {
+                CoreEditorUtils.DrawSplitter();
+                bool expended = state[mask];
+                bool isBoxed = (options & FoldoutOption.Boxed) != 0;
+                bool isIndented = (options & FoldoutOption.Indent) != 0;
+                bool newExpended = CoreEditorUtils.DrawHeaderFoldout(title, expended, isBoxed);
+                if (newExpended ^ expended)
+                    state[mask] = newExpended;
+                if (newExpended)
+                {
+                    if(isIndented)
+                        ++EditorGUI.indentLevel;
+                    for (var i = 0; i < contentDrawer.Length; i++)
+                        contentDrawer[i](data, editor);
+                    if(isIndented)
+                        --EditorGUI.indentLevel;
+                    EditorGUILayout.Space();
+                }
+            });
+        }
+    }
+
     public static class CoreEditorDrawersExtensions
     {
+        [Obsolete]
         public static void Draw<TUIState, TData>(this IEnumerable<CoreEditorDrawer<TUIState, TData>.IDrawer> drawers, TUIState s, TData p, Editor o)
         {
             foreach (var drawer in drawers)
                 drawer.Draw(s, p, o);
+        }
+        
+        public static void Draw<TData>(this IEnumerable<CoreEditorDrawer<TData>.IDrawer> drawers, TData p, Editor o)
+        {
+            foreach (var drawer in drawers)
+                drawer.Draw(p, o);
         }
     }
 }
