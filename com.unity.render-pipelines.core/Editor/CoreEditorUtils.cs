@@ -79,11 +79,15 @@ namespace UnityEditor.Experimental.Rendering
         }
 
         // UI Helpers
-
         public static void DrawMultipleFields(string label, SerializedProperty[] ppts, GUIContent[] lbls)
         {
+            DrawMultipleFields(GetContent(label), ppts, lbls);
+        }
+
+        public static void DrawMultipleFields(GUIContent label, SerializedProperty[] ppts, GUIContent[] lbls)
+        {
             GUILayout.BeginHorizontal();
-            EditorGUILayout.PrefixLabel(GetContent(label));
+            EditorGUILayout.PrefixLabel(label);
             GUILayout.BeginVertical();
             var labelWidth = EditorGUIUtility.labelWidth;
             EditorGUIUtility.labelWidth = 45;
@@ -118,6 +122,11 @@ namespace UnityEditor.Experimental.Rendering
 
         public static void DrawHeader(string title)
         {
+            DrawHeader(GetContent(title));
+        }
+
+        public static void DrawHeader(GUIContent title)
+        {
             var backgroundRect = GUILayoutUtility.GetRect(1f, 17f);
 
             var labelRect = backgroundRect;
@@ -141,7 +150,13 @@ namespace UnityEditor.Experimental.Rendering
             EditorGUI.LabelField(labelRect, title, EditorStyles.boldLabel);
         }
 
+
         public static bool DrawHeaderFoldout(string title, bool state, bool isBoxed = false)
+        {
+            return DrawHeaderFoldout(GetContent(title), state, isBoxed);
+        }
+
+        public static bool DrawHeaderFoldout(GUIContent title, bool state, bool isBoxed = false)
         {
             var backgroundRect = GUILayoutUtility.GetRect(1f, 17f);
 
@@ -188,6 +203,11 @@ namespace UnityEditor.Experimental.Rendering
 
         public static bool DrawHeaderToggle(string title, SerializedProperty group, SerializedProperty activeField, Action<Vector2> contextAction = null)
         {
+            return DrawHeaderToggle(GetContent(title), group, activeField, contextAction);
+        }
+
+        public static bool DrawHeaderToggle(GUIContent title, SerializedProperty group, SerializedProperty activeField, Action<Vector2> contextAction = null)
+        {
             var backgroundRect = GUILayoutUtility.GetRect(1f, 17f);
 
             var labelRect = backgroundRect;
@@ -215,7 +235,7 @@ namespace UnityEditor.Experimental.Rendering
 
             // Title
             using (new EditorGUI.DisabledScope(!activeField.boolValue))
-                EditorGUI.LabelField(labelRect, GetContent(title), EditorStyles.boldLabel);
+                EditorGUI.LabelField(labelRect, title, EditorStyles.boldLabel);
 
             // Foldout
             group.serializedObject.Update();
