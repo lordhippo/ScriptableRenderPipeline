@@ -110,8 +110,14 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
         [Range(0.0f, 1.0f)]
         public float lightDimmer = 1.0f;
 
-        [Range(0.0f, 1.0f)]
-        public float volumetricDimmer = 1.0f;
+        [Range(0.0f, 1.0f), SerializeField, FormerlySerializedAs("volumetricDimmer")]
+        private float m_VolumetricDimmer = 1.0f;
+        
+        public float volumetricDimmer
+        {
+            get { return useVolumetric ? m_VolumetricDimmer : 0f; }
+            set {  m_VolumetricDimmer = value; }
+        }
 
         // Used internally to convert any light unit input into light intensity
         public LightUnit lightUnit = LightUnit.Lumen;
@@ -156,6 +162,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
 
         // This is specific for the LightEditor GUI and not use at runtime
         public bool useOldInspector = false;
+        public bool useVolumetric = true;
         public bool featuresFoldout = true;
         public bool showAdditionalSettings = false;
         public float displayLightIntensity;
