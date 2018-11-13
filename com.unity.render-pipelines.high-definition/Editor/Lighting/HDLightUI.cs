@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.Experimental.Rendering;
 using UnityEngine.Experimental.Rendering.HDPipeline;
@@ -8,7 +9,7 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline
 {
     using CED = CoreEditorDrawer<SerializedHDLight>;
 
-    partial class HDLightUI
+    static partial class HDLightUI
     {
         // LightType + LightTypeExtent combined
         internal enum LightShape
@@ -40,51 +41,121 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline
             Lumen = LightUnit.Lumen,
             Candela = LightUnit.Candela,
         }
-        
+
         enum Expandable
         {
-            Features = 1 << 0,
+            General = 1 << 0,
             Shape = 1 << 1,
-            Light = 1 << 2,
-            Shadows = 1 << 3
+            Emission = 1 << 2,
+            Volumetric = 1 << 3,
+            Shadows = 1 << 4
         }
-        
+
+        enum Advanceable
+        {
+            General = 1 << 0,
+            Shape = 1 << 1,
+            Emission = 1 << 2,
+            ShadowMap = 1 << 3,
+            ContactShadow = 1 << 4,
+            BakedShadow = 1 << 5,
+        }
+
         const float k_MinLightSize = 0.01f; // Provide a small size of 1cm for line light
 
-        readonly static ExpandedState<Expandable, Light> k_ExpandedState = new ExpandedState<Expandable, Light>(Expandable.Features | Expandable.Shape | Expandable.Light, "HDRP");
+        readonly static ExpandedState<Expandable, Light> k_ExpandedState = new ExpandedState<Expandable, Light>(Expandable.General | Expandable.Shape | Expandable.Emission, "HDRP");
 
-        public static readonly CED.IDrawer[] Inspector = new CED.IDrawer[]
-        {
-            CED.FoldoutGroup("Features", Expandable.Features, k_ExpandedState, DrawFeatures),
-            CED.FoldoutGroup("Shape", Expandable.Shape, k_ExpandedState, DrawShape),
-            CED.FoldoutGroup("Light", Expandable.Light, k_ExpandedState, DrawLightSettings),
-            CED.FoldoutGroup("Shadows", Expandable.Shadows, k_ExpandedState, DrawShadows)
-        };
+        public static readonly CED.IDrawer Inspector;
         
-        static void DrawFeatures(SerializedHDLight serialized, Editor owner)
+        static bool GetAdvanced(Advanceable mask, SerializedHDLight serialized, Editor owner)
         {
-            bool disabledScope = serialized.editorLightShape == LightShape.Tube || (serialized.editorLightShape == LightShape.Rectangle && serialized.settings.isRealtime);
-
-            using (new EditorGUI.DisabledScope(disabledScope))
-            {
-                bool shadowsEnabled = EditorGUILayout.Toggle(CoreEditorUtils.GetContent("Enable Shadows"), serialized.settings.shadowsType.enumValueIndex != 0);
-                serialized.settings.shadowsType.enumValueIndex = shadowsEnabled ? (int)LightShadows.Hard : (int)LightShadows.None;
-            }
-
-            EditorGUILayout.PropertyField(serialized.serializedLightData.showAdditionalSettings);
+            return (serialized.serializedLightData.showAdditionalSettings.intValue & (int)mask) != 0;
         }
 
-        static void DrawShape(SerializedHDLight serialized, Editor owner)
+        static void SwitchAdvanced(Advanceable mask, SerializedHDLight serialized, Editor owner)
         {
-            EditorGUI.BeginChangeCheck(); // For GI we need to detect any change on additional data and call SetLightDirty + For intensity we need to detect light shape change
+            if ((serialized.serializedLightData.showAdditionalSettings.intValue & (int)mask) != 0)
+            {
+                serialized.serializedLightData.showAdditionalSettings.intValue &= ~(int)mask;
+            }
+            else
+            {
+                serialized.serializedLightData.showAdditionalSettings.intValue |= (int)mask;
+            }
+        }
+
+        static HDLightUI()
+        {
+            Inspector = CED.Group(
+                CED.AdvancedFoldoutGroup(s_Styles.generalHeader, Expandable.General, k_ExpandedState,
+                    (serialized, owner) => GetAdvanced(Advanceable.General, serialized, owner),
+                    (serialized, owner) => SwitchAdvanced(Advanceable.General, serialized, owner),
+                    DrawGeneralContent,
+                    DrawGeneralAdvancedContent
+                    ),
+                CED.AdvancedFoldoutGroup(s_Styles.shapeHeader, Expandable.Shape, k_ExpandedState,
+                    (serialized, owner) => GetAdvanced(Advanceable.Shape, serialized, owner),
+                    (serialized, owner) => SwitchAdvanced(Advanceable.Shape, serialized, owner),
+                    DrawShapeContent,
+                    DrawShapeAdvancedContent
+                    ),
+                CED.AdvancedFoldoutGroup(s_Styles.emissionHeader, Expandable.Emission, k_ExpandedState,
+                    (serialized, owner) => GetAdvanced(Advanceable.Emission, serialized, owner),
+                    (serialized, owner) => SwitchAdvanced(Advanceable.Emission, serialized, owner),
+                    DrawEmissionContent,
+                    DrawEmissionAdvancedContent
+                    ),
+                CED.FoldoutGroup(s_Styles.volumetricHeader, Expandable.Volumetric, k_ExpandedState, DrawVolumetric),
+                CED.FoldoutGroup(s_Styles.shadowHeader, Expandable.Shadows, k_ExpandedState,
+                    DrawShadowMapHeader,
+                    CED.Conditional((serialized, owner) => GetAdvanced(Advanceable.ShadowMap, serialized, owner) && k_ExpandedState[Expandable.Shadows], CED.Group(GroupOption.Indent, DrawShadowMapContent)).Draw,
+                    DrawContactShadowsHeader,
+                    CED.Conditional((serialized, owner) => GetAdvanced(Advanceable.ShadowMap, serialized, owner) && k_ExpandedState[Expandable.Shadows], CED.Group(GroupOption.Indent, DrawContactShadowsContent)).Draw,
+                    DrawBakedShadowsHeader,
+                    CED.Conditional((serialized, owner) => GetAdvanced(Advanceable.ShadowMap, serialized, owner) && k_ExpandedState[Expandable.Shadows], CED.Group(GroupOption.Indent, DrawBakedShadowsContent)).Draw
+                    )
+            );
+        }
+
+        static void DrawGeneralContent(SerializedHDLight serialized, Editor owner)
+        {
+            //bool disabledScope = serialized.editorLightShape == LightShape.Tube || (serialized.editorLightShape == LightShape.Rectangle && serialized.settings.isRealtime);
+
+            //using (new EditorGUI.DisabledScope(disabledScope))
+            //{
+            //    bool shadowsEnabled = EditorGUILayout.Toggle(CoreEditorUtils.GetContent("Enable Shadows"), serialized.settings.shadowsType.enumValueIndex != 0);
+            //    serialized.settings.shadowsType.enumValueIndex = shadowsEnabled ? (int)LightShadows.Hard : (int)LightShadows.None;
+            //}
+
+            //EditorGUILayout.PropertyField(serialized.serializedLightData.showAdditionalSettings);
+
+
 
             EditorGUI.BeginChangeCheck();
             serialized.editorLightShape = (LightShape)EditorGUILayout.Popup(s_Styles.shape, (int)serialized.editorLightShape, s_Styles.shapeNames);
             if (EditorGUI.EndChangeCheck())
+            {
                 UpdateLightIntensityUnit(serialized, owner);
 
-            if (serialized.editorLightShape != LightShape.Directional)
-                serialized.settings.DrawRange(false);
+                // For GI we need to detect any change on additional data and call SetLightDirty + For intensity we need to detect light shape change
+                serialized.needUpdateAreaLightEmissiveMeshComponents = true;
+                ((Light)owner.target).SetLightDirty(); // Should be apply only to parameter that's affect GI, but make the code cleaner
+            }
+
+            serialized.settings.DrawLightmapping();
+        }
+
+        static void DrawGeneralAdvancedContent(SerializedHDLight serialized, Editor owner)
+        {
+            using (new EditorGUI.DisabledScope(!HDUtils.hdrpSettings.supportLightLayers))
+            {
+                serialized.serializedLightData.lightLayers.intValue = Convert.ToInt32(EditorGUILayout.EnumFlagsField(s_Styles.lightLayer, (LightLayerEnum)serialized.serializedLightData.lightLayers.intValue));
+            }
+        }
+
+        static void DrawShapeContent(SerializedHDLight serialized, Editor owner)
+        {
+            EditorGUI.BeginChangeCheck(); // For GI we need to detect any change on additional data and call SetLightDirty + For intensity we need to detect light shape change
 
             // LightShape is HD specific, it need to drive LightType from the original LightType
             // when it make sense, so the GI is still in sync with the light shape
@@ -112,28 +183,30 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline
                     serialized.serializedLightData.lightTypeExtent.enumValueIndex = (int)LightTypeExtent.Punctual;
                     EditorGUILayout.PropertyField(serialized.serializedLightData.spotLightShape, s_Styles.spotLightShape);
                     var spotLightShape = (SpotLightShape)serialized.serializedLightData.spotLightShape.enumValueIndex;
-                    if (spotLightShape == SpotLightShape.Box)
+                    switch (spotLightShape)
                     {
-                        // Box light is a boxed directional light.
-                        EditorGUILayout.PropertyField(serialized.serializedLightData.shapeWidth, s_Styles.shapeWidthBox);
-                        EditorGUILayout.PropertyField(serialized.serializedLightData.shapeHeight, s_Styles.shapeHeightBox);
-                    }
-                    else
-                    {
-                        if (spotLightShape == SpotLightShape.Cone)
-                        {
+                        case SpotLightShape.Box:
+                            // Box directional light.
+                            EditorGUILayout.PropertyField(serialized.serializedLightData.shapeWidth, s_Styles.shapeWidthBox);
+                            EditorGUILayout.PropertyField(serialized.serializedLightData.shapeHeight, s_Styles.shapeHeightBox);
+                            break;
+                        case SpotLightShape.Cone:
+                            // Cone spot projector
                             serialized.settings.DrawSpotAngle();
                             EditorGUILayout.Slider(serialized.serializedLightData.spotInnerPercent, 0f, 100f, s_Styles.spotInnerPercent);
-                        }
-                        // TODO : replace with angle and ratio
-                        else if (spotLightShape == SpotLightShape.Pyramid)
-                        {
+                            EditorGUILayout.PropertyField(serialized.serializedLightData.shapeRadius, s_Styles.lightRadius);
+                            EditorGUILayout.PropertyField(serialized.serializedLightData.maxSmoothness, s_Styles.maxSmoothness);
+                            break;
+                        case SpotLightShape.Pyramid:
+                            // pyramid spot projector
                             serialized.settings.DrawSpotAngle();
                             EditorGUILayout.Slider(serialized.serializedLightData.aspectRatio, 0.05f, 20.0f, s_Styles.aspectRatioPyramid);
-                        }
-
-                        EditorGUILayout.PropertyField(serialized.serializedLightData.shapeRadius, s_Styles.lightRadius);
-                        EditorGUILayout.PropertyField(serialized.serializedLightData.maxSmoothness, s_Styles.maxSmoothness);
+                            EditorGUILayout.PropertyField(serialized.serializedLightData.shapeRadius, s_Styles.lightRadius);
+                            EditorGUILayout.PropertyField(serialized.serializedLightData.maxSmoothness, s_Styles.maxSmoothness);
+                            break;
+                        default:
+                            Debug.Assert(false, "Not implemented light type");
+                            break;
                     }
                     break;
 
@@ -189,6 +262,41 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline
                 serialized.serializedLightData.shapeRadius.floatValue = Mathf.Max(serialized.serializedLightData.shapeRadius.floatValue, 0.0f);
                 serialized.needUpdateAreaLightEmissiveMeshComponents = true;
                 ((Light)owner.target).SetLightDirty(); // Should be apply only to parameter that's affect GI, but make the code cleaner
+            }
+        }
+
+        static void DrawShapeAdvancedContent(SerializedHDLight serialized, Editor owner)
+        {
+            switch (serialized.editorLightShape)
+            {
+                case LightShape.Spot:
+                    var spotLightShape = (SpotLightShape)serialized.serializedLightData.spotLightShape.enumValueIndex;
+                    switch (spotLightShape)
+                    {
+                        case SpotLightShape.Cone:
+                        case SpotLightShape.Pyramid:
+                            if (serialized.serializedLightData.lightUnit.enumValueIndex == (int)PunctualLightUnit.Lumen)
+                                EditorGUILayout.PropertyField(serialized.serializedLightData.enableSpotReflector, s_Styles.enableSpotReflector);
+                            break;
+                        case SpotLightShape.Box:
+                            // no advanced parameters
+                            break;
+                        default:
+                            Debug.Assert(false, "Not implemented light type");
+                            break;
+                    }
+                    break;
+                case LightShape.Directional:
+                case LightShape.Point:
+                case LightShape.Rectangle:
+                case LightShape.Tube:
+                // no advanced parameters
+                case (LightShape)(-1):
+                    // don't do anything, this is just to handle multi selection
+                    break;
+                default:
+                    Debug.Assert(false, "Not implemented light type");
+                    break;
             }
         }
 
@@ -280,7 +388,7 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline
             serialized.serializedLightData.intensity.floatValue = intensity;
         }
 
-        static void DrawLightSettings(SerializedHDLight serialized, Editor owner)
+        static void DrawEmissionContent(SerializedHDLight serialized, Editor owner)
         {
             serialized.settings.DrawColor();
 
@@ -289,18 +397,19 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline
             serialized.serializedLightData.lightUnit.enumValueIndex = (int)LightIntensityUnitPopup(serialized, owner);
             EditorGUILayout.EndHorizontal();
 
-            // Only display reflector option if it make sense
-            if (serialized.editorLightShape == LightShape.Spot)
+            if (serialized.editorLightShape != LightShape.Directional)
             {
-                var spotLightShape = (SpotLightShape)serialized.serializedLightData.spotLightShape.enumValueIndex;
-                if ((spotLightShape == SpotLightShape.Cone || spotLightShape == SpotLightShape.Pyramid)
-                    && serialized.serializedLightData.lightUnit.enumValueIndex == (int)PunctualLightUnit.Lumen)
-                    EditorGUILayout.PropertyField(serialized.serializedLightData.enableSpotReflector, s_Styles.enableSpotReflector);
+                EditorGUI.BeginChangeCheck();
+                serialized.settings.DrawRange(false);
+                if (EditorGUI.EndChangeCheck())
+                {
+                    // For GI we need to detect any change on additional data and call SetLightDirty + For intensity we need to detect light shape change
+                    serialized.needUpdateAreaLightEmissiveMeshComponents = true;
+                    ((Light)owner.target).SetLightDirty(); // Should be apply only to parameter that's affect GI, but make the code cleaner
+                }
             }
 
             serialized.settings.DrawBounceIntensity();
-
-            serialized.settings.DrawLightmapping();
 
             EditorGUI.BeginChangeCheck(); // For GI we need to detect any change on additional data and call SetLightDirty
 
@@ -319,34 +428,32 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline
                 }
             }
 
-            if (serialized.serializedLightData.showAdditionalSettings.boolValue)
+            if (EditorGUI.EndChangeCheck())
             {
-                EditorGUILayout.Space();
-                EditorGUILayout.LabelField("Additional Settings", EditorStyles.boldLabel);
-                EditorGUI.indentLevel++;
-                using (new EditorGUI.DisabledScope(!HDUtils.hdrpSettings.supportLightLayers))
-                {
-                    serialized.serializedLightData.lightLayers.intValue = Convert.ToInt32(EditorGUILayout.EnumFlagsField(s_Styles.lightLayer, (LightLayerEnum)serialized.serializedLightData.lightLayers.intValue));
-                }
-                EditorGUILayout.PropertyField(serialized.serializedLightData.affectDiffuse, s_Styles.affectDiffuse);
-                EditorGUILayout.PropertyField(serialized.serializedLightData.affectSpecular, s_Styles.affectSpecular);
-                if (serialized.editorLightShape != LightShape.Directional)
-                    EditorGUILayout.PropertyField(serialized.serializedLightData.fadeDistance, s_Styles.fadeDistance);
-                EditorGUILayout.PropertyField(serialized.serializedLightData.lightDimmer, s_Styles.lightDimmer);
-                EditorGUILayout.PropertyField(serialized.serializedLightData.volumetricDimmer, s_Styles.volumetricDimmer);
-                if (serialized.editorLightShape != LightShape.Directional)
-                    EditorGUILayout.PropertyField(serialized.serializedLightData.applyRangeAttenuation, s_Styles.applyRangeAttenuation);
+                serialized.needUpdateAreaLightEmissiveMeshComponents = true;
+                ((Light)owner.target).SetLightDirty(); // Should be apply only to parameter that's affect GI, but make the code cleaner
+            }
+        }
 
-                // Emissive mesh for area light only
-                if (HDAdditionalLightData.IsAreaLight(serialized.serializedLightData.lightTypeExtent))
-                {
-                    EditorGUI.BeginChangeCheck();
-                    EditorGUILayout.PropertyField(serialized.serializedLightData.displayAreaLightEmissiveMesh, s_Styles.displayAreaLightEmissiveMesh);
-                    if (EditorGUI.EndChangeCheck())
-                        serialized.needUpdateAreaLightEmissiveMeshComponents = true;
-                }
+        static void DrawEmissionAdvancedContent(SerializedHDLight serialized, Editor owner)
+        {
+            EditorGUI.BeginChangeCheck(); // For GI we need to detect any change on additional data and call SetLightDirty
 
-                EditorGUI.indentLevel--;
+            EditorGUILayout.PropertyField(serialized.serializedLightData.affectDiffuse, s_Styles.affectDiffuse);
+            EditorGUILayout.PropertyField(serialized.serializedLightData.affectSpecular, s_Styles.affectSpecular);
+            if (serialized.editorLightShape != LightShape.Directional)
+                EditorGUILayout.PropertyField(serialized.serializedLightData.fadeDistance, s_Styles.fadeDistance);
+            EditorGUILayout.PropertyField(serialized.serializedLightData.lightDimmer, s_Styles.lightDimmer);
+            if (serialized.editorLightShape != LightShape.Directional)
+                EditorGUILayout.PropertyField(serialized.serializedLightData.applyRangeAttenuation, s_Styles.applyRangeAttenuation);
+
+            // Emissive mesh for area light only
+            if (HDAdditionalLightData.IsAreaLight(serialized.serializedLightData.lightTypeExtent))
+            {
+                EditorGUI.BeginChangeCheck();
+                EditorGUILayout.PropertyField(serialized.serializedLightData.displayAreaLightEmissiveMesh, s_Styles.displayAreaLightEmissiveMesh);
+                if (EditorGUI.EndChangeCheck())
+                    serialized.needUpdateAreaLightEmissiveMeshComponents = true;
             }
 
             if (EditorGUI.EndChangeCheck())
@@ -357,30 +464,47 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline
             }
         }
 
-        static void DrawBakedShadowParameters(SerializedHDLight serialized, Editor owner)
+        static void DrawVolumetric(SerializedHDLight serialized, Editor owner)
         {
-            switch ((LightType)serialized.settings.lightType.enumValueIndex)
+            EditorGUILayout.PropertyField(serialized.serializedLightData.useVolumetric, s_Styles.volumetricEnable);
+            using (new EditorGUI.DisabledScope(!serialized.serializedLightData.useVolumetric.boolValue))
             {
-                case LightType.Directional:
-                    EditorGUILayout.Slider(serialized.settings.bakedShadowAngleProp, 0f, 90f, s_Styles.bakedShadowAngle);
-                    break;
-                case LightType.Spot:
-                case LightType.Point:
-                    EditorGUILayout.PropertyField(serialized.settings.bakedShadowRadiusProp, s_Styles.bakedShadowRadius);
-                    break;
+                EditorGUILayout.PropertyField(serialized.serializedLightData.volumetricDimmer, s_Styles.volumetricDimmer);
+                EditorGUILayout.Slider(serialized.serializedShadowData.volumetricShadowDimmer, 0.0f, 1.0f, s_Styles.volumetricShadowDimmer);
             }
-            
-            if (serialized.settings.isMixed)
-            {
-                EditorGUI.BeginChangeCheck();
+        }
 
-                EditorGUILayout.PropertyField(serialized.serializedLightData.nonLightmappedOnly, s_Styles.nonLightmappedOnly);
+        static void DrawShadowMapHeader(SerializedHDLight serialized, Editor owner)
+        {
+            EditorGUILayout.Toggle("Additional Settings", true, EditorStyles.boldLabel);
+        }
 
-                if (EditorGUI.EndChangeCheck())
-                {
-                    ((Light)owner.target).lightShadowCasterMode = serialized.serializedLightData.nonLightmappedOnly.boolValue ? LightShadowCasterMode.NonLightmappedOnly : LightShadowCasterMode.Everything;
-                }
-            }
+
+        static void DrawShadowMapContent(SerializedHDLight serialized, Editor owner)
+        {
+            EditorGUILayout.LabelField("Additional Settings");
+        }
+
+        static void DrawContactShadowsHeader(SerializedHDLight serialized, Editor owner)
+        {
+            EditorGUILayout.Toggle("Additional Settings", true, EditorStyles.boldLabel);
+        }
+
+
+        static void DrawContactShadowsContent(SerializedHDLight serialized, Editor owner)
+        {
+            EditorGUILayout.LabelField("Additional Settings");
+        }
+
+        static void DrawBakedShadowsHeader(SerializedHDLight serialized, Editor owner)
+        {
+            EditorGUILayout.Toggle("Additional Settings", true, EditorStyles.boldLabel);
+        }
+
+
+        static void DrawBakedShadowsContent(SerializedHDLight serialized, Editor owner)
+        {
+            EditorGUILayout.LabelField("Additional Settings");
         }
 
         static void DrawShadows(SerializedHDLight serialized, Editor owner)
@@ -412,7 +536,6 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline
                 EditorGUILayout.PropertyField(serialized.serializedShadowData.contactShadows, s_Styles.contactShadows);
 
                 EditorGUILayout.Slider(serialized.serializedShadowData.shadowDimmer, 0.0f, 1.0f, s_Styles.shadowDimmer);
-                EditorGUILayout.Slider(serialized.serializedShadowData.volumetricShadowDimmer, 0.0f, 1.0f, s_Styles.volumetricShadowDimmer);
 
                 if (serialized.settings.lightType.enumValueIndex != (int)LightType.Directional)
                 {
@@ -442,6 +565,32 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline
                 EditorGUI.indentLevel--;
             }
         }
+        
+        static void DrawBakedShadowParameters(SerializedHDLight serialized, Editor owner)
+        {
+            switch ((LightType)serialized.settings.lightType.enumValueIndex)
+            {
+                case LightType.Directional:
+                    EditorGUILayout.Slider(serialized.settings.bakedShadowAngleProp, 0f, 90f, s_Styles.bakedShadowAngle);
+                    break;
+                case LightType.Spot:
+                case LightType.Point:
+                    EditorGUILayout.PropertyField(serialized.settings.bakedShadowRadiusProp, s_Styles.bakedShadowRadius);
+                    break;
+            }
+
+            if (serialized.settings.isMixed)
+            {
+                EditorGUI.BeginChangeCheck();
+
+                EditorGUILayout.PropertyField(serialized.serializedLightData.nonLightmappedOnly, s_Styles.nonLightmappedOnly);
+
+                if (EditorGUI.EndChangeCheck())
+                {
+                    ((Light)owner.target).lightShadowCasterMode = serialized.serializedLightData.nonLightmappedOnly.boolValue ? LightShadowCasterMode.NonLightmappedOnly : LightShadowCasterMode.Everything;
+                }
+            }
+        }
 
         static void DrawShadowSettings(SerializedHDLight serialized, Editor owner)
         {
@@ -467,7 +616,7 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline
                     throw new ArgumentException("Unknown HDShadowQuality");
             }
         }
-        
+
         static void DrawLowShadowSettings(SerializedHDLight serialized, Editor owner)
         {
             // Currently there is nothing to display here

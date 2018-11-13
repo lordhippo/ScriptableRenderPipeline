@@ -41,6 +41,7 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline
             public SerializedProperty useOldInspector;
             public SerializedProperty showFeatures;
             public SerializedProperty showAdditionalSettings;
+            public SerializedProperty useVolumetric;
         }
 
         public sealed class SerializedShadowData
@@ -117,7 +118,8 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline
                     // Editor stuff
                     useOldInspector = o.Find(x => x.useOldInspector),
                     showFeatures = o.Find(x => x.featuresFoldout),
-                    showAdditionalSettings = o.Find(x => x.showAdditionalSettings)
+                    showAdditionalSettings = o.Find(x => x.showAdditionalSettings),
+                    useVolumetric = o.Find(x => x.useVolumetric)
                 };
 
             // TODO: Review this once AdditionalShadowData is refactored

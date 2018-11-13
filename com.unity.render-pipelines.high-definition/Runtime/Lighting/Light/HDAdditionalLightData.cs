@@ -164,7 +164,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
         public bool useOldInspector = false;
         public bool useVolumetric = true;
         public bool featuresFoldout = true;
-        public bool showAdditionalSettings = false;
+        public byte showAdditionalSettings = 0;
         public float displayLightIntensity;
 
         // When true, a mesh will be display to represent the area light (Can only be change in editor, component is added in Editor)
