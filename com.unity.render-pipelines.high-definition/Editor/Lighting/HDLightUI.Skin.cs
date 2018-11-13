@@ -14,6 +14,9 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline
             public readonly GUIContent emissionHeader = new GUIContent("Emission");
             public readonly GUIContent volumetricHeader = new GUIContent("Volumetric");
             public readonly GUIContent shadowHeader = new GUIContent("Shadows");
+            public readonly GUIContent shadowMapSubHeader = new GUIContent("Shadow Map");
+            public readonly GUIContent contactShadowsSubHeader = new GUIContent("Contact Shadows");
+            public readonly GUIContent bakedShadowsSubHeader = new GUIContent("Baked Shadows");
 
             // Base (copy from LightEditor.cs)
             public readonly GUIContent cookieSizeX = new GUIContent("Size X", "Controls the size of the cookie mask currently assigned to the light.");

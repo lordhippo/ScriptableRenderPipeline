@@ -48,7 +48,10 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline
             Shape = 1 << 1,
             Emission = 1 << 2,
             Volumetric = 1 << 3,
-            Shadows = 1 << 4
+            Shadows = 1 << 4,
+            ShadowMap = 1 << 5,
+            ContactShadow = 1 << 6,
+            BakedShadow = 1 << 7
         }
 
         enum Advanceable
@@ -66,10 +69,22 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline
         readonly static ExpandedState<Expandable, Light> k_ExpandedState = new ExpandedState<Expandable, Light>(Expandable.General | Expandable.Shape | Expandable.Emission, "HDRP");
 
         public static readonly CED.IDrawer Inspector;
-        
+
         static bool GetAdvanced(Advanceable mask, SerializedHDLight serialized, Editor owner)
         {
             return (serialized.serializedLightData.showAdditionalSettings.intValue & (int)mask) != 0;
+        }
+
+        static void SetAdvanced(Advanceable mask, bool value, SerializedHDLight serialized, Editor owner)
+        {
+            if (value)
+            {
+                serialized.serializedLightData.showAdditionalSettings.intValue |= (int)mask;
+            }
+            else
+            {
+                serialized.serializedLightData.showAdditionalSettings.intValue &= ~(int)mask;
+            }
         }
 
         static void SwitchAdvanced(Advanceable mask, SerializedHDLight serialized, Editor owner)
@@ -107,13 +122,25 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline
                     ),
                 CED.FoldoutGroup(s_Styles.volumetricHeader, Expandable.Volumetric, k_ExpandedState, DrawVolumetric),
                 CED.FoldoutGroup(s_Styles.shadowHeader, Expandable.Shadows, k_ExpandedState,
-                    DrawShadowMapHeader,
-                    CED.Conditional((serialized, owner) => GetAdvanced(Advanceable.ShadowMap, serialized, owner) && k_ExpandedState[Expandable.Shadows], CED.Group(GroupOption.Indent, DrawShadowMapContent)).Draw,
-                    DrawContactShadowsHeader,
-                    CED.Conditional((serialized, owner) => GetAdvanced(Advanceable.ShadowMap, serialized, owner) && k_ExpandedState[Expandable.Shadows], CED.Group(GroupOption.Indent, DrawContactShadowsContent)).Draw,
-                    DrawBakedShadowsHeader,
-                    CED.Conditional((serialized, owner) => GetAdvanced(Advanceable.ShadowMap, serialized, owner) && k_ExpandedState[Expandable.Shadows], CED.Group(GroupOption.Indent, DrawBakedShadowsContent)).Draw
-                    )
+                    CED.AdvancedFoldoutGroup(s_Styles.shadowMapSubHeader, Expandable.ShadowMap, k_ExpandedState,
+                        (serialized, owner) => GetAdvanced(Advanceable.ShadowMap, serialized, owner),
+                        (serialized, owner) => SwitchAdvanced(Advanceable.ShadowMap, serialized, owner),
+                        DrawShadowMapContent,
+                        DrawShadowMapAdvancedContent,
+                        FoldoutOption.SubFoldout | FoldoutOption.Indent
+                        ),
+                    CED.AdvancedFoldoutGroup(s_Styles.contactShadowsSubHeader, Expandable.ContactShadow, k_ExpandedState,
+                        (serialized, owner) => GetAdvanced(Advanceable.ContactShadow, serialized, owner),
+                        (serialized, owner) => SwitchAdvanced(Advanceable.ContactShadow, serialized, owner),
+                        DrawContactShadowsContent,
+                        DrawContactShadowsAdvancedContent,
+                        FoldoutOption.SubFoldout | FoldoutOption.Indent | FoldoutOption.NoSpaceAtEnd
+                        ),
+                    CED.Conditional((serialized, owner) => serialized.settings.isBakedOrMixed || serialized.settings.isCompletelyBaked,
+                        CED.space,
+                        CED.FoldoutGroup(s_Styles.bakedShadowsSubHeader, Expandable.BakedShadow, k_ExpandedState, FoldoutOption.SubFoldout | FoldoutOption.Indent | FoldoutOption.NoSpaceAtEnd, DrawBakedShadowsContent))
+                    ),
+                CED.FoldoutGroup(s_Styles.shadowHeader, Expandable.Shadows, k_ExpandedState, DrawShadows)
             );
         }
 
@@ -474,37 +501,44 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline
             }
         }
 
-        static void DrawShadowMapHeader(SerializedHDLight serialized, Editor owner)
-        {
-            EditorGUILayout.Toggle("Additional Settings", true, EditorStyles.boldLabel);
-        }
-
-
         static void DrawShadowMapContent(SerializedHDLight serialized, Editor owner)
         {
-            EditorGUILayout.LabelField("Additional Settings");
+            EditorGUILayout.LabelField("ShadowMap Settings");
         }
 
-        static void DrawContactShadowsHeader(SerializedHDLight serialized, Editor owner)
+
+        static void DrawShadowMapAdvancedContent(SerializedHDLight serialized, Editor owner)
         {
-            EditorGUILayout.Toggle("Additional Settings", true, EditorStyles.boldLabel);
+            EditorGUILayout.LabelField("ShadowMap AdvancedSettings");
         }
-
 
         static void DrawContactShadowsContent(SerializedHDLight serialized, Editor owner)
         {
-            EditorGUILayout.LabelField("Additional Settings");
+            EditorGUILayout.LabelField("ContactShadows Settings");
         }
 
-        static void DrawBakedShadowsHeader(SerializedHDLight serialized, Editor owner)
+
+        static void DrawContactShadowsAdvancedContent(SerializedHDLight serialized, Editor owner)
         {
-            EditorGUILayout.Toggle("Additional Settings", true, EditorStyles.boldLabel);
+            EditorGUILayout.LabelField("ContactShadows AdvancedSettings");
         }
-
 
         static void DrawBakedShadowsContent(SerializedHDLight serialized, Editor owner)
         {
-            EditorGUILayout.LabelField("Additional Settings");
+            if (serialized.settings.isCompletelyBaked)
+            {
+                DrawBakedShadowParameters(serialized, owner);
+                return;
+            }
+            
+            if (serialized.settings.isBakedOrMixed)
+                DrawBakedShadowParameters(serialized, owner);
+        }
+
+
+        static void DrawBakedShadowsAdvancedContent(SerializedHDLight serialized, Editor owner)
+        {
+            EditorGUILayout.LabelField("BakedShadows AdvancedSettings");
         }
 
         static void DrawShadows(SerializedHDLight serialized, Editor owner)
