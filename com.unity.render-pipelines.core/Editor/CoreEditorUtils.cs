@@ -241,6 +241,94 @@ namespace UnityEditor.Experimental.Rendering
             return state;
         }
 
+        /// <summary> Draw a foldout header </summary>
+        /// <param name="title"> The title of the header </param>
+        /// <param name="state"> The state of the header </param>
+        /// <param name="isBoxed"> [optional] is the eader contained in a box style ? </param>
+        /// <param name="isAdvanced"> [optional] Delegate used to draw the right state of the advanced button. If null, no button drawn. </param>
+        /// <param name="switchAdvanced"> [optional] Callback call when advanced button clicked. Should be used to toggle its state. </param>
+        public static bool DrawSubHeaderFoldout(string title, bool state, bool isBoxed = false, Func<bool> isAdvanced = null, Action switchAdvanced = null)
+        {
+            return DrawSubHeaderFoldout(GetContent(title), state, isBoxed, isAdvanced, switchAdvanced);
+        }
+
+        /// <summary> Draw a foldout header </summary>
+        /// <param name="title"> The title of the header </param>
+        /// <param name="state"> The state of the header </param>
+        /// <param name="isBoxed"> [optional] is the eader contained in a box style ? </param>
+        /// <param name="isAdvanced"> [optional] Delegate used to draw the right state of the advanced button. If null, no button drawn. </param>
+        /// <param name="switchAdvanced"> [optional] Callback call when advanced button clicked. Should be used to toggle its state. </param>
+        public static bool DrawSubHeaderFoldout(GUIContent title, bool state, bool isBoxed = false, Func<bool> isAdvanced = null, Action switchAdvanced = null)
+        {
+            const float height = 17f;
+            var backgroundRect = GUILayoutUtility.GetRect(1f, height);
+
+            var labelRect = backgroundRect;
+            labelRect.xMin += 16f;
+            labelRect.xMax -= 20f;
+
+            var foldoutRect = backgroundRect;
+            foldoutRect.y += 1f;
+            foldoutRect.x += 15 * EditorGUI.indentLevel; //GUI do not handle indent. Handle it here
+            foldoutRect.width = 13f;
+            foldoutRect.height = 13f;
+
+            var advancedRect = new Rect();
+            if (isAdvanced != null)
+            {
+                advancedRect = backgroundRect;
+                advancedRect.x += advancedRect.width - 16 - 1;
+                advancedRect.y -= 2;
+                advancedRect.height = 16;
+                advancedRect.width = 16;
+
+                GUIStyle styleAdvanced = new GUIStyle(GUI.skin.toggle);
+                styleAdvanced.normal.background = isAdvanced()
+                    ? Resources.Load<Texture2D>("Advanced_Pressed_mini")
+                    : Resources.Load<Texture2D>("Advanced_UnPressed_mini");
+                styleAdvanced.onActive.background = styleAdvanced.normal.background;
+                styleAdvanced.onFocused.background = styleAdvanced.normal.background;
+                styleAdvanced.onNormal.background = styleAdvanced.normal.background;
+                styleAdvanced.onHover.background = styleAdvanced.normal.background;
+                styleAdvanced.active.background = styleAdvanced.normal.background;
+                styleAdvanced.focused.background = styleAdvanced.normal.background;
+                styleAdvanced.hover.background = styleAdvanced.normal.background;
+                EditorGUI.BeginChangeCheck();
+                GUI.Toggle(advancedRect, isAdvanced(), GUIContent.none, styleAdvanced);
+                if (EditorGUI.EndChangeCheck() && switchAdvanced != null)
+                {
+                    switchAdvanced();
+                }
+            }
+
+            // Background rect should be full-width
+            backgroundRect.xMin = 0f;
+            backgroundRect.width += 4f;
+
+            if (isBoxed)
+            {
+                labelRect.xMin += 5;
+                foldoutRect.xMin += 5;
+                backgroundRect.xMin = EditorGUIUtility.singleLineHeight;
+                backgroundRect.width -= 3;
+            }
+
+            // Title
+            EditorGUI.LabelField(labelRect, title, EditorStyles.boldLabel);
+
+            // Active checkbox
+            state = GUI.Toggle(foldoutRect, state, GUIContent.none, EditorStyles.foldout);
+
+            var e = Event.current;
+            if (e.type == EventType.MouseDown && backgroundRect.Contains(e.mousePosition) && !advancedRect.Contains(e.mousePosition) && e.button == 0)
+            {
+                state = !state;
+                e.Use();
+            }
+
+            return state;
+        }
+
         public static bool DrawHeaderToggle(string title, SerializedProperty group, SerializedProperty activeField, Action<Vector2> contextAction = null)
         {
             return DrawHeaderToggle(GetContent(title), group, activeField, contextAction);

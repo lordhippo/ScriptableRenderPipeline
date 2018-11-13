@@ -12,7 +12,9 @@ namespace UnityEditor.Experimental.Rendering
         Indent = 1 << 0,
         [Obsolete("animated inspector does not been approved by UX team")]
         Animate = 1 << 1,
-        Boxed = 1 << 2
+        Boxed = 1 << 2,
+        SubFoldout = 1 << 3,
+        NoSpaceAtEnd = 1 << 4
     }
 
     [Flags]
@@ -583,13 +585,25 @@ namespace UnityEditor.Experimental.Rendering
         {
             return Group((data, owner) =>
             {
-                CoreEditorUtils.DrawSplitter();
-                bool expended = state[mask];
                 bool isBoxed = (options & FoldoutOption.Boxed) != 0;
                 bool isIndented = (options & FoldoutOption.Indent) != 0;
-                bool newExpended = CoreEditorUtils.DrawHeaderFoldout(title, expended, isBoxed,
-                    isAdvanced == null ? (Func<bool>)null : () => isAdvanced(data, owner),
-                    switchAdvanced == null ? (Action)null : () => switchAdvanced(data, owner));
+                bool isSubFoldout = (options & FoldoutOption.SubFoldout) != 0;
+                bool noSpaceAtEnd = (options & FoldoutOption.NoSpaceAtEnd) != 0;
+                bool expended = state[mask];
+                bool newExpended = expended;
+                if (isSubFoldout)
+                {
+                    newExpended = CoreEditorUtils.DrawSubHeaderFoldout(title, expended, isBoxed,
+                        isAdvanced == null ? (Func<bool>)null : () => isAdvanced(data, owner),
+                        switchAdvanced == null ? (Action)null : () => switchAdvanced(data, owner));
+                }
+                else
+                {
+                    CoreEditorUtils.DrawSplitter();
+                    newExpended = CoreEditorUtils.DrawHeaderFoldout(title, expended, isBoxed,
+                        isAdvanced == null ? (Func<bool>)null : () => isAdvanced(data, owner),
+                        switchAdvanced == null ? (Action)null : () => switchAdvanced(data, owner));
+                }
                 if (newExpended ^ expended)
                     state[mask] = newExpended;
                 if (newExpended)
@@ -600,7 +614,8 @@ namespace UnityEditor.Experimental.Rendering
                         contentDrawers[i](data, owner);
                     if (isIndented)
                         --EditorGUI.indentLevel;
-                    EditorGUILayout.Space();
+                    if (!noSpaceAtEnd)
+                        EditorGUILayout.Space();
                 }
             });
         }
@@ -613,10 +628,10 @@ namespace UnityEditor.Experimental.Rendering
         /// <param name="switchAdvanced"> Delegate to know what to do when advance is switched. </param>
         /// <param name="normalContent"> The content of the foldout header always visible if expended. </param>
         /// <param name="advancedContent"> The content of the foldout header only visible if advanced mode is active and if foldout is expended. </param>
-        public static IDrawer AdvancedFoldoutGroup<TEnum, TState>(GUIContent foldoutTitle, TEnum foldoutMask, ExpandedState<TEnum, TState> foldoutState, Enabler isAdvanced, SwitchEnabler switchAdvanced, IDrawer normalContent, IDrawer advancedContent)
+        public static IDrawer AdvancedFoldoutGroup<TEnum, TState>(GUIContent foldoutTitle, TEnum foldoutMask, ExpandedState<TEnum, TState> foldoutState, Enabler isAdvanced, SwitchEnabler switchAdvanced, IDrawer normalContent, IDrawer advancedContent, FoldoutOption options = FoldoutOption.Indent)
             where TEnum : struct, IConvertible
         {
-            return AdvancedFoldoutGroup(foldoutTitle, foldoutMask, foldoutState, isAdvanced, switchAdvanced, normalContent.Draw, advancedContent.Draw);
+            return AdvancedFoldoutGroup(foldoutTitle, foldoutMask, foldoutState, isAdvanced, switchAdvanced, normalContent.Draw, advancedContent.Draw, options);
         }
 
         /// <summary> Helper to draw a foldout with an advanced switch on it. </summary>
@@ -627,10 +642,10 @@ namespace UnityEditor.Experimental.Rendering
         /// <param name="switchAdvanced"> Delegate to know what to do when advance is switched. </param>
         /// <param name="normalContent"> The content of the foldout header always visible if expended. </param>
         /// <param name="advancedContent"> The content of the foldout header only visible if advanced mode is active and if foldout is expended. </param>
-        public static IDrawer AdvancedFoldoutGroup<TEnum, TState>(GUIContent foldoutTitle, TEnum foldoutMask, ExpandedState<TEnum, TState> foldoutState, Enabler isAdvanced, SwitchEnabler switchAdvanced, ActionDrawer normalContent, IDrawer advancedContent)
+        public static IDrawer AdvancedFoldoutGroup<TEnum, TState>(GUIContent foldoutTitle, TEnum foldoutMask, ExpandedState<TEnum, TState> foldoutState, Enabler isAdvanced, SwitchEnabler switchAdvanced, ActionDrawer normalContent, IDrawer advancedContent, FoldoutOption options = FoldoutOption.Indent)
             where TEnum : struct, IConvertible
         {
-            return AdvancedFoldoutGroup(foldoutTitle, foldoutMask, foldoutState, isAdvanced, switchAdvanced, normalContent, advancedContent.Draw);
+            return AdvancedFoldoutGroup(foldoutTitle, foldoutMask, foldoutState, isAdvanced, switchAdvanced, normalContent, advancedContent.Draw, options);
         }
 
         /// <summary> Helper to draw a foldout with an advanced switch on it. </summary>
@@ -641,10 +656,10 @@ namespace UnityEditor.Experimental.Rendering
         /// <param name="switchAdvanced"> Delegate to know what to do when advance is switched. </param>
         /// <param name="normalContent"> The content of the foldout header always visible if expended. </param>
         /// <param name="advancedContent"> The content of the foldout header only visible if advanced mode is active and if foldout is expended. </param>
-        public static IDrawer AdvancedFoldoutGroup<TEnum, TState>(GUIContent foldoutTitle, TEnum foldoutMask, ExpandedState<TEnum, TState> foldoutState, Enabler isAdvanced, SwitchEnabler switchAdvanced, IDrawer normalContent, ActionDrawer advancedContent)
+        public static IDrawer AdvancedFoldoutGroup<TEnum, TState>(GUIContent foldoutTitle, TEnum foldoutMask, ExpandedState<TEnum, TState> foldoutState, Enabler isAdvanced, SwitchEnabler switchAdvanced, IDrawer normalContent, ActionDrawer advancedContent, FoldoutOption options = FoldoutOption.Indent)
             where TEnum : struct, IConvertible
         {
-            return AdvancedFoldoutGroup(foldoutTitle, foldoutMask, foldoutState, isAdvanced, switchAdvanced, normalContent.Draw, advancedContent);
+            return AdvancedFoldoutGroup(foldoutTitle, foldoutMask, foldoutState, isAdvanced, switchAdvanced, normalContent.Draw, advancedContent, options);
         }
 
         /// <summary> Helper to draw a foldout with an advanced switch on it. </summary>
@@ -655,10 +670,10 @@ namespace UnityEditor.Experimental.Rendering
         /// <param name="switchAdvanced"> Delegate to know what to do when advance is switched. </param>
         /// <param name="normalContent"> The content of the foldout header always visible if expended. </param>
         /// <param name="advancedContent"> The content of the foldout header only visible if advanced mode is active and if foldout is expended. </param>
-        public static IDrawer AdvancedFoldoutGroup<TEnum, TState>(GUIContent foldoutTitle, TEnum foldoutMask, ExpandedState<TEnum, TState> foldoutState, Enabler isAdvanced, SwitchEnabler switchAdvanced, ActionDrawer normalContent, ActionDrawer advancedContent)
+        public static IDrawer AdvancedFoldoutGroup<TEnum, TState>(GUIContent foldoutTitle, TEnum foldoutMask, ExpandedState<TEnum, TState> foldoutState, Enabler isAdvanced, SwitchEnabler switchAdvanced, ActionDrawer normalContent, ActionDrawer advancedContent, FoldoutOption options = FoldoutOption.Indent)
             where TEnum : struct, IConvertible
         {
-            return FoldoutGroup(foldoutTitle, foldoutMask, foldoutState, FoldoutOption.Indent, isAdvanced, switchAdvanced,
+            return FoldoutGroup(foldoutTitle, foldoutMask, foldoutState, options, isAdvanced, switchAdvanced,
                 normalContent,
                 Conditional((serialized, owner) => isAdvanced(serialized, owner) && foldoutState[foldoutMask], advancedContent).Draw
                 );
