@@ -15,7 +15,7 @@ namespace UnityEditor.Experimental.Rendering
     {
         // GUIContent cache utilities
         static Dictionary<string, GUIContent> s_GUIContentCache = new Dictionary<string, GUIContent>();
-
+        
         public static GUIContent GetContent(string textAndTooltip)
         {
             if (string.IsNullOrEmpty(textAndTooltip))
@@ -150,15 +150,27 @@ namespace UnityEditor.Experimental.Rendering
             EditorGUI.LabelField(labelRect, title, EditorStyles.boldLabel);
         }
 
-
-        public static bool DrawHeaderFoldout(string title, bool state, bool isBoxed = false)
+        /// <summary> Draw a foldout header </summary>
+        /// <param name="title"> The title of the header </param>
+        /// <param name="state"> The state of the header </param>
+        /// <param name="isBoxed"> [optional] is the eader contained in a box style ? </param>
+        /// <param name="isAdvanced"> [optional] Delegate used to draw the right state of the advanced button. If null, no button drawn. </param>
+        /// <param name="switchAdvanced"> [optional] Callback call when advanced button clicked. Should be used to toggle its state. </param>
+        public static bool DrawHeaderFoldout(string title, bool state, bool isBoxed = false, Func<bool> isAdvanced = null, Action switchAdvanced = null)
         {
-            return DrawHeaderFoldout(GetContent(title), state, isBoxed);
+            return DrawHeaderFoldout(GetContent(title), state, isBoxed, isAdvanced, switchAdvanced);
         }
 
-        public static bool DrawHeaderFoldout(GUIContent title, bool state, bool isBoxed = false)
+        /// <summary> Draw a foldout header </summary>
+        /// <param name="title"> The title of the header </param>
+        /// <param name="state"> The state of the header </param>
+        /// <param name="isBoxed"> [optional] is the eader contained in a box style ? </param>
+        /// <param name="isAdvanced"> [optional] Delegate used to draw the right state of the advanced button. If null, no button drawn. </param>
+        /// <param name="switchAdvanced"> [optional] Callback call when advanced button clicked. Should be used to toggle its state. </param>
+        public static bool DrawHeaderFoldout(GUIContent title, bool state, bool isBoxed = false, Func<bool> isAdvanced = null, Action switchAdvanced = null)
         {
-            var backgroundRect = GUILayoutUtility.GetRect(1f, 17f);
+            const float height = 17f;
+            var backgroundRect = GUILayoutUtility.GetRect(1f, height);
 
             var labelRect = backgroundRect;
             labelRect.xMin += 16f;
@@ -168,6 +180,34 @@ namespace UnityEditor.Experimental.Rendering
             foldoutRect.y += 1f;
             foldoutRect.width = 13f;
             foldoutRect.height = 13f;
+            
+            var advancedRect = new Rect();
+            if (isAdvanced != null)
+            {
+                advancedRect = backgroundRect;
+                advancedRect.x += advancedRect.width - 16 - 1;
+                advancedRect.y -= 2;
+                advancedRect.height = 16;
+                advancedRect.width = 16;
+
+                GUIStyle styleAdvanced = new GUIStyle(GUI.skin.toggle);
+                styleAdvanced.normal.background = isAdvanced()
+                    ? Resources.Load<Texture2D>("Advanced_Pressed_mini")
+                    : Resources.Load<Texture2D>("Advanced_UnPressed_mini");
+                styleAdvanced.onActive.background = styleAdvanced.normal.background;
+                styleAdvanced.onFocused.background = styleAdvanced.normal.background;
+                styleAdvanced.onNormal.background = styleAdvanced.normal.background;
+                styleAdvanced.onHover.background = styleAdvanced.normal.background;
+                styleAdvanced.active.background = styleAdvanced.normal.background;
+                styleAdvanced.focused.background = styleAdvanced.normal.background;
+                styleAdvanced.hover.background = styleAdvanced.normal.background;
+                EditorGUI.BeginChangeCheck();
+                GUI.Toggle(advancedRect, isAdvanced(), GUIContent.none, styleAdvanced);
+                if(EditorGUI.EndChangeCheck() && switchAdvanced != null)
+                {
+                    switchAdvanced();
+                }
+            }
 
             // Background rect should be full-width
             backgroundRect.xMin = 0f;
@@ -192,12 +232,12 @@ namespace UnityEditor.Experimental.Rendering
             state = GUI.Toggle(foldoutRect, state, GUIContent.none, EditorStyles.foldout);
 
             var e = Event.current;
-            if (e.type == EventType.MouseDown && backgroundRect.Contains(e.mousePosition) && e.button == 0)
+            if (e.type == EventType.MouseDown && backgroundRect.Contains(e.mousePosition) && !advancedRect.Contains(e.mousePosition) && e.button == 0)
             {
                 state = !state;
                 e.Use();
             }
-
+            
             return state;
         }
 

@@ -277,7 +277,8 @@ namespace UnityEditor.Experimental.Rendering
             void Draw(TData p, Editor owner);
         }
 
-        public delegate bool Enabler(TData d, Editor owner);
+        public delegate bool Enabler(TData data, Editor owner);
+        public delegate void SwitchEnabler(TData data, Editor owner);
         public delegate T2Data DataSelect<T2Data>(TData data, Editor owner);
         public delegate void ActionDrawer(TData data, Editor owner);
 
@@ -571,15 +572,24 @@ namespace UnityEditor.Experimental.Rendering
         /// <param name="state">The ExpandedState describing the component</param>
         /// <param name="contentDrawers">The content of the foldout header</param>
         public static IDrawer FoldoutGroup<TEnum, TState>(GUIContent title, TEnum mask, ExpandedState<TEnum, TState> state, FoldoutOption options, params ActionDrawer[] contentDrawers)
-        where TEnum : struct, IConvertible
+            where TEnum : struct, IConvertible
         {
-            return Group((data, editor) =>
+            return FoldoutGroup(title, mask, state, options, null, null, contentDrawers);
+        }
+
+        // This one is private as we do not want to have unhandled advanced switch. Change it if necessary.
+        static IDrawer FoldoutGroup<TEnum, TState>(GUIContent title, TEnum mask, ExpandedState<TEnum, TState> state, FoldoutOption options, Enabler isAdvanced, SwitchEnabler switchAdvanced, params ActionDrawer[] contentDrawers)
+            where TEnum : struct, IConvertible
+        {
+            return Group((data, owner) =>
             {
                 CoreEditorUtils.DrawSplitter();
                 bool expended = state[mask];
                 bool isBoxed = (options & FoldoutOption.Boxed) != 0;
                 bool isIndented = (options & FoldoutOption.Indent) != 0;
-                bool newExpended = CoreEditorUtils.DrawHeaderFoldout(title, expended, isBoxed);
+                bool newExpended = CoreEditorUtils.DrawHeaderFoldout(title, expended, isBoxed,
+                    isAdvanced == null ? (Func<bool>)null : () => isAdvanced(data, owner),
+                    switchAdvanced == null ? (Action)null : () => switchAdvanced(data, owner));
                 if (newExpended ^ expended)
                     state[mask] = newExpended;
                 if (newExpended)
@@ -587,12 +597,71 @@ namespace UnityEditor.Experimental.Rendering
                     if (isIndented)
                         ++EditorGUI.indentLevel;
                     for (var i = 0; i < contentDrawers.Length; i++)
-                        contentDrawers[i](data, editor);
+                        contentDrawers[i](data, owner);
                     if (isIndented)
                         --EditorGUI.indentLevel;
                     EditorGUILayout.Space();
                 }
             });
+        }
+
+        /// <summary> Helper to draw a foldout with an advanced switch on it. </summary>
+        /// <param name="title">Title wanted for this foldout header</param>
+        /// <param name="mask">Bit mask (enum) used to define the boolean saving the state in ExpandedState</param>
+        /// <param name="state">The ExpandedState describing the component</param>
+        /// <param name="isAdvanced"> Delegate allowing to check if advanced mode is active. </param>
+        /// <param name="switchAdvanced"> Delegate to know what to do when advance is switched. </param>
+        /// <param name="normalContent"> The content of the foldout header always visible if expended. </param>
+        /// <param name="advancedContent"> The content of the foldout header only visible if advanced mode is active and if foldout is expended. </param>
+        public static IDrawer AdvancedFoldoutGroup<TEnum, TState>(GUIContent foldoutTitle, TEnum foldoutMask, ExpandedState<TEnum, TState> foldoutState, Enabler isAdvanced, SwitchEnabler switchAdvanced, IDrawer normalContent, IDrawer advancedContent)
+            where TEnum : struct, IConvertible
+        {
+            return AdvancedFoldoutGroup(foldoutTitle, foldoutMask, foldoutState, isAdvanced, switchAdvanced, normalContent.Draw, advancedContent.Draw);
+        }
+
+        /// <summary> Helper to draw a foldout with an advanced switch on it. </summary>
+        /// <param name="title">Title wanted for this foldout header</param>
+        /// <param name="mask">Bit mask (enum) used to define the boolean saving the state in ExpandedState</param>
+        /// <param name="state">The ExpandedState describing the component</param>
+        /// <param name="isAdvanced"> Delegate allowing to check if advanced mode is active. </param>
+        /// <param name="switchAdvanced"> Delegate to know what to do when advance is switched. </param>
+        /// <param name="normalContent"> The content of the foldout header always visible if expended. </param>
+        /// <param name="advancedContent"> The content of the foldout header only visible if advanced mode is active and if foldout is expended. </param>
+        public static IDrawer AdvancedFoldoutGroup<TEnum, TState>(GUIContent foldoutTitle, TEnum foldoutMask, ExpandedState<TEnum, TState> foldoutState, Enabler isAdvanced, SwitchEnabler switchAdvanced, ActionDrawer normalContent, IDrawer advancedContent)
+            where TEnum : struct, IConvertible
+        {
+            return AdvancedFoldoutGroup(foldoutTitle, foldoutMask, foldoutState, isAdvanced, switchAdvanced, normalContent, advancedContent.Draw);
+        }
+
+        /// <summary> Helper to draw a foldout with an advanced switch on it. </summary>
+        /// <param name="title">Title wanted for this foldout header</param>
+        /// <param name="mask">Bit mask (enum) used to define the boolean saving the state in ExpandedState</param>
+        /// <param name="state">The ExpandedState describing the component</param>
+        /// <param name="isAdvanced"> Delegate allowing to check if advanced mode is active. </param>
+        /// <param name="switchAdvanced"> Delegate to know what to do when advance is switched. </param>
+        /// <param name="normalContent"> The content of the foldout header always visible if expended. </param>
+        /// <param name="advancedContent"> The content of the foldout header only visible if advanced mode is active and if foldout is expended. </param>
+        public static IDrawer AdvancedFoldoutGroup<TEnum, TState>(GUIContent foldoutTitle, TEnum foldoutMask, ExpandedState<TEnum, TState> foldoutState, Enabler isAdvanced, SwitchEnabler switchAdvanced, IDrawer normalContent, ActionDrawer advancedContent)
+            where TEnum : struct, IConvertible
+        {
+            return AdvancedFoldoutGroup(foldoutTitle, foldoutMask, foldoutState, isAdvanced, switchAdvanced, normalContent.Draw, advancedContent);
+        }
+
+        /// <summary> Helper to draw a foldout with an advanced switch on it. </summary>
+        /// <param name="title">Title wanted for this foldout header</param>
+        /// <param name="mask">Bit mask (enum) used to define the boolean saving the state in ExpandedState</param>
+        /// <param name="state">The ExpandedState describing the component</param>
+        /// <param name="isAdvanced"> Delegate allowing to check if advanced mode is active. </param>
+        /// <param name="switchAdvanced"> Delegate to know what to do when advance is switched. </param>
+        /// <param name="normalContent"> The content of the foldout header always visible if expended. </param>
+        /// <param name="advancedContent"> The content of the foldout header only visible if advanced mode is active and if foldout is expended. </param>
+        public static IDrawer AdvancedFoldoutGroup<TEnum, TState>(GUIContent foldoutTitle, TEnum foldoutMask, ExpandedState<TEnum, TState> foldoutState, Enabler isAdvanced, SwitchEnabler switchAdvanced, ActionDrawer normalContent, ActionDrawer advancedContent)
+            where TEnum : struct, IConvertible
+        {
+            return FoldoutGroup(foldoutTitle, foldoutMask, foldoutState, FoldoutOption.Indent, isAdvanced, switchAdvanced,
+                normalContent,
+                Conditional((serialized, owner) => isAdvanced(serialized, owner) && foldoutState[foldoutMask], advancedContent).Draw
+                );
         }
     }
 
@@ -605,6 +674,7 @@ namespace UnityEditor.Experimental.Rendering
                 drawer.Draw(s, p, o);
         }
 
+        /// <summary> Concatenate a collection of IDrawer as a unique IDrawer </summary>
         public static void Draw<TData>(this IEnumerable<CoreEditorDrawer<TData>.IDrawer> drawers, TData data, Editor owner)
         {
             foreach (var drawer in drawers)
