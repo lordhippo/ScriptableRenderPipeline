@@ -4,6 +4,9 @@
 #include "Core.hlsl"
 #include "CoreRP/ShaderLibrary/Packing.hlsl"
 #include "CoreRP/ShaderLibrary/CommonMaterial.hlsl"
+#if defined(UNITY_COLORSPACE_GAMMA)
+#include "CoreRP/ShaderLibrary/Color.hlsl"
+#endif
 
 TEXTURE2D(_MainTex);            SAMPLER(sampler_MainTex);
 TEXTURE2D(_BumpMap);            SAMPLER(sampler_BumpMap);
@@ -64,6 +67,9 @@ half3 SampleEmission(float2 uv, half3 emissionColor, TEXTURE2D_ARGS(emissionMap,
 #ifndef _EMISSION
     return 0;
 #else
+    #if defined(UNITY_COLORSPACE_GAMMA)
+        emissionColor = FastSRGBToLinear(emissionColor);
+     #endif
     return SAMPLE_TEXTURE2D_COLOR(emissionMap, sampler_emissionMap, uv).rgb * emissionColor;
 #endif
 }

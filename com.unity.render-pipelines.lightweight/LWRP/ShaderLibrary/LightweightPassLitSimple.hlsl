@@ -2,6 +2,9 @@
 #define LIGHTWEIGHT_PASS_LIT_INCLUDED
 
 #include "LWRP/ShaderLibrary/Lighting.hlsl"
+#if defined(UNITY_COLORSPACE_GAMMA)
+#include "CoreRP/ShaderLibrary/Color.hlsl"
+#endif
 
 struct LightweightVertexInput
 {
@@ -122,6 +125,10 @@ half4 LitPassFragmentSimple(LightweightVertexOutput IN) : SV_Target
 {
     UNITY_SETUP_INSTANCE_ID(IN);
 
+#if defined(UNITY_COLORSPACE_GAMMA)
+    _Color = FastSRGBToLinear(_Color);
+#endif
+
     float2 uv = IN.uv;
     half4 diffuseAlpha = SampleAlbedoAlpha(uv, TEXTURE2D_PARAM(_MainTex, sampler_MainTex));
     half3 diffuse = diffuseAlpha.rgb * _Color.rgb;
@@ -142,6 +149,11 @@ half4 LitPassFragmentSimple(LightweightVertexOutput IN) : SV_Target
 
     half4 color = LightweightFragmentBlinnPhong(inputData, diffuse, specularGloss, shininess, emission, alpha);
     ApplyFog(color.rgb, inputData.fogCoord);
+
+#if defined(UNITY_COLORSPACE_GAMMA)
+    color = FastLinearToSRGB(color);
+#endif
+
     return color;
 };
 

@@ -4,6 +4,9 @@
 #include "Core.hlsl"
 #include "CoreRP/ShaderLibrary/CommonMaterial.hlsl"
 #include "InputSurfaceCommon.hlsl"
+#if defined(UNITY_COLORSPACE_GAMMA)
+#include "CoreRP/ShaderLibrary/Color.hlsl"
+#endif
 
 CBUFFER_START(UnityPerMaterial)
 float4 _MainTex_ST;
@@ -41,9 +44,17 @@ half4 SampleMetallicSpecGloss(float2 uv, half albedoAlpha)
     #endif
 #else // _METALLICSPECGLOSSMAP
     #if _SPECULAR_SETUP
-        specGloss.rgb = _SpecColor.rgb;
+        #if defined(UNITY_COLORSPACE_GAMMA)
+            specGloss.rgb = FastSRGBToLinear(_SpecColor.rgb);
+        #else
+            specGloss.rgb = _SpecColor.rgb;
+        #endif
     #else
-        specGloss.rgb = _Metallic.rrr;
+        #if defined(UNITY_COLORSPACE_GAMMA)
+            specGloss.rgb = Gamma22ToLinear(_Metallic).rrr;
+        #else
+            specGloss.rgb = _Metallic.rrr;
+        #endif
     #endif
 
     #ifdef _SMOOTHNESS_TEXTURE_ALBEDO_CHANNEL_A
@@ -73,6 +84,10 @@ half SampleOcclusion(float2 uv)
 
 inline void InitializeStandardLitSurfaceData(float2 uv, out SurfaceData outSurfaceData)
 {
+#if defined(UNITY_COLORSPACE_GAMMA)
+    _Color = FastSRGBToLinear(_Color);
+#endif
+
     half4 albedoAlpha = SampleAlbedoAlpha(uv, TEXTURE2D_PARAM(_MainTex, sampler_MainTex));
     outSurfaceData.alpha = Alpha(albedoAlpha.a, _Color, _Cutoff);
 
