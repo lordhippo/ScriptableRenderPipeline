@@ -52,7 +52,7 @@
 #define INTRINSIC_WAVE_ACTIVE_ALL_ANY
 bool WaveActiveAllTrue(bool expression)
 {
-    return (WaveActiveBallot(true) == WaveActiveBallot(expression));
+    return all(WaveActiveBallot(true) == WaveActiveBallot(expression));
 }
 
 bool WaveActiveAnyTrue(bool expression)
