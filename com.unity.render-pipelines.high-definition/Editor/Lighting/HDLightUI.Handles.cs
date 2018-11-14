@@ -158,6 +158,9 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline
         [DrawGizmo(GizmoType.Selected)]
         static void DrawGizmoForHDAdditionalLightData(HDAdditionalLightData src, GizmoType gizmoType)
         {
+            if (!(UnityEngine.Rendering.GraphicsSettings.renderPipelineAsset is HDRenderPipelineAsset))
+                return;
+
             var light = src.gameObject.GetComponent<Light>();
 
             if (light.type != LightType.Directional)
