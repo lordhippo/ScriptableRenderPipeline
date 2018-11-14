@@ -726,11 +726,11 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline
                 activeFields.Add("Refraction");
                 switch (masterNode.refractionModel)
                 {
-                    case ScreenSpaceLighting.RefractionModel.Plane:
-                        activeFields.Add("RefractionPlane");
+                    case ScreenSpaceRefraction.RefractionModel.Box:
+                        activeFields.Add("RefractionBox");
                         break;
 
-                    case ScreenSpaceLighting.RefractionModel.Sphere:
+                    case ScreenSpaceRefraction.RefractionModel.Sphere:
                         activeFields.Add("RefractionSphere");
                         break;
 
@@ -771,7 +771,9 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline
             if (pass.PixelShaderUsesSlot(HDLitMasterNode.AmbientOcclusionSlotId))
             {
                 var occlusionSlot = masterNode.FindSlot<Vector1MaterialSlot>(HDLitMasterNode.AmbientOcclusionSlotId);
-                if (occlusionSlot.value != occlusionSlot.defaultValue)
+
+                bool connected = masterNode.IsSlotConnected(HDLitMasterNode.AmbientOcclusionSlotId);
+                if (connected || occlusionSlot.value != occlusionSlot.defaultValue)
                 {
                     activeFields.Add("AmbientOcclusion");
                 }

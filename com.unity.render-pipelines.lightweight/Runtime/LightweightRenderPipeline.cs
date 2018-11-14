@@ -49,6 +49,26 @@ namespace UnityEngine.Experimental.Rendering.LightweightPipeline
         public ScriptableRenderer renderer { get; private set; }
         PipelineSettings settings { get; set; }
 
+        public static float maxShadowBias
+        {
+            get { return 10.0f; }
+        }
+
+        public static float minRenderScale
+        {
+            get { return 0.1f; }
+        }
+
+        public static float maxRenderScale
+        {
+            get { return 4.0f; }
+        }
+
+        public static int maxPerObjectLightCount
+        {
+            get { return 4; }
+        }
+
         internal struct PipelineSettings
         {
             public bool supportsCameraDepthTexture { get; private set; }
@@ -65,7 +85,7 @@ namespace UnityEngine.Experimental.Rendering.LightweightPipeline
             public bool supportsAdditionalLightShadows { get; private set; }
             public int additionalLightsShadowmapResolution { get; private set; }
             public float shadowDistance { get; private set; }
-            public int cascadeCount { get; private set; }
+            public ShadowCascadesOption shadowCascadeOption { get; private set; }
             public float cascade2Split { get; private set; }
             public Vector3 cascade4Split { get; private set; }
             public float shadowDepthBias { get; private set; }
@@ -100,7 +120,7 @@ namespace UnityEngine.Experimental.Rendering.LightweightPipeline
 
                 // Shadow settings
                 cache.shadowDistance = asset.shadowDistance;
-                cache.cascadeCount = asset.cascadeCount;
+                cache.shadowCascadeOption = asset.shadowCascadeOption;
                 cache.cascade2Split = asset.cascade2Split;
                 cache.cascade4Split = asset.cascade4Split;
                 cache.shadowDepthBias = asset.shadowDepthBias;
@@ -156,12 +176,6 @@ namespace UnityEngine.Experimental.Rendering.LightweightPipeline
 
         protected override void Render(ScriptableRenderContext renderContext, Camera[] cameras)
         {
-            if (cameras == null || cameras.Length == 0)
-            {
-                Debug.LogWarning("The camera list passed to the render pipeline is either null or empty.");
-                return;
-            }
-
             BeginFrameRendering(cameras);
 
             GraphicsSettings.lightsUseLinearIntensity = true;
@@ -187,6 +201,10 @@ namespace UnityEngine.Experimental.Rendering.LightweightPipeline
                 return;
             }
 
+            ScriptableCullingParameters cullingParameters;    
+            if (!camera.TryGetCullingParameters(IsStereoEnabled(camera), out cullingParameters))
+                return;
+
             CommandBuffer cmd = CommandBufferPool.Get(k_RenderCameraTag);
             using (new ProfilingSample(cmd, k_RenderCameraTag))
             {
@@ -195,13 +213,6 @@ namespace UnityEngine.Experimental.Rendering.LightweightPipeline
                 ScriptableRenderer renderer = pipelineInstance.renderer;
                 InitializeCameraData(settings, camera, out cameraData);
                 SetupPerCameraShaderConstants(cameraData);
-
-                ScriptableCullingParameters cullingParameters;
-                if (!camera.TryGetCullingParameters(cameraData.isStereoEnabled, out cullingParameters))
-                {
-                    CommandBufferPool.Release(cmd);
-                    return;
-                }
 
                 if (pipelineInstance.settings.additionalLightsRenderingMode == LightRenderingMode.Disabled ||
                     pipelineInstance.settings.maxAdditionalLights == 0)
@@ -234,14 +245,14 @@ namespace UnityEngine.Experimental.Rendering.LightweightPipeline
                 renderer.Clear();
                 setupToUse.Setup(renderer, ref renderingData);
                 renderer.Execute(context, ref renderingData);
-
-                context.ExecuteCommandBuffer(cmd);
-                CommandBufferPool.Release(cmd);
-                context.Submit();
-#if UNITY_EDITOR
-                Handles.DrawGizmos(camera);
-#endif
             }
+
+            context.ExecuteCommandBuffer(cmd);
+            CommandBufferPool.Release(cmd);
+            context.Submit();
+#if UNITY_EDITOR
+            Handles.DrawGizmos(camera);
+#endif
         }
 
         static void SetSupportedRenderingFeatures()
@@ -293,27 +304,25 @@ namespace UnityEngine.Experimental.Rendering.LightweightPipeline
             cameraData.renderScale = (Mathf.Abs(1.0f - usedRenderScale) < kRenderScaleThreshold) ? 1.0f : usedRenderScale;
             cameraData.renderScale = (camera.cameraType == CameraType.Game) ? cameraData.renderScale : 1.0f;
 
-            cameraData.requiresDepthTexture = settings.supportsCameraDepthTexture || cameraData.isSceneViewCamera;
-            cameraData.requiresOpaqueTexture = settings.supportsCameraOpaqueTexture;
             cameraData.opaqueTextureDownsampling = settings.opaqueDownsampling;
 
             bool anyShadowsEnabled = settings.supportsMainLightShadows || settings.supportsAdditionalLightShadows;
             cameraData.maxShadowDistance = (anyShadowsEnabled) ? settings.shadowDistance : 0.0f;
 
-            AdditionalCameraData additionalCameraData = camera.gameObject.GetComponent<AdditionalCameraData>();
+            LWRPAdditionalCameraData additionalCameraData = camera.gameObject.GetComponent<LWRPAdditionalCameraData>();
             if (additionalCameraData != null)
             {
                 cameraData.maxShadowDistance = (additionalCameraData.renderShadows) ? cameraData.maxShadowDistance : 0.0f;
-                cameraData.requiresDepthTexture &= additionalCameraData.requiresDepthTexture;
-                cameraData.requiresOpaqueTexture &= additionalCameraData.requiresColorTexture;
+                cameraData.requiresDepthTexture = additionalCameraData.requiresDepthTexture;
+                cameraData.requiresOpaqueTexture = additionalCameraData.requiresColorTexture;
             }
-            else if (!cameraData.isSceneViewCamera && camera.cameraType != CameraType.Reflection && camera.cameraType != CameraType.Preview)
+            else
             {
-                cameraData.requiresDepthTexture = false;
-                cameraData.requiresOpaqueTexture = false;
+                cameraData.requiresDepthTexture = settings.supportsCameraDepthTexture;
+                cameraData.requiresOpaqueTexture = settings.supportsCameraOpaqueTexture;
             }
 
-            cameraData.requiresDepthTexture |= cameraData.postProcessEnabled;
+            cameraData.requiresDepthTexture |= cameraData.isSceneViewCamera || cameraData.postProcessEnabled;
 
             var commonOpaqueFlags = SortingCriteria.CommonOpaque;
             var noFrontToBackOpaqueFlags = SortingCriteria.SortingLayer | SortingCriteria.RenderQueue | SortingCriteria.OptimizeStateChanges | SortingCriteria.CanvasOrder;
@@ -388,8 +397,25 @@ namespace UnityEngine.Experimental.Rendering.LightweightPipeline
             shadowData.supportsMainLightShadows = settings.supportsMainLightShadows && mainLightCastShadows;
 
             // we resolve shadows in screenspace when cascades are enabled to save ALU as computing cascade index + shadowCoord on fragment is expensive
-            shadowData.requiresScreenSpaceShadowResolve = shadowData.supportsMainLightShadows && supportsScreenSpaceShadows && settings.cascadeCount > 1;
-            shadowData.mainLightShadowCascadesCount = (shadowData.requiresScreenSpaceShadowResolve) ? settings.cascadeCount : 1;
+            shadowData.requiresScreenSpaceShadowResolve = shadowData.supportsMainLightShadows && supportsScreenSpaceShadows && settings.shadowCascadeOption != ShadowCascadesOption.NoCascades;
+
+            int shadowCascadesCount;
+            switch (settings.shadowCascadeOption)
+            {
+                case ShadowCascadesOption.FourCascades:
+                    shadowCascadesCount = 4;
+                    break;
+
+                case ShadowCascadesOption.TwoCascades:
+                    shadowCascadesCount = 2;
+                    break;
+
+                default:
+                    shadowCascadesCount = 1;
+                    break;
+            }
+
+            shadowData.mainLightShadowCascadesCount = (shadowData.requiresScreenSpaceShadowResolve) ? shadowCascadesCount : 1;
             shadowData.mainLightShadowmapWidth = settings.mainLightShadowmapResolution;
             shadowData.mainLightShadowmapHeight = settings.mainLightShadowmapResolution;
 
