@@ -476,7 +476,6 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline
         public string ColorMaskOverride;
         public List<string> StencilOverride;
         public List<string> RequiredFields;         // feeds into the dependency analysis
-//        public ShaderGraphRequirements requirements;
         public bool UseInPreview;
 
         // All these lists could probably be hashed to aid lookups.
