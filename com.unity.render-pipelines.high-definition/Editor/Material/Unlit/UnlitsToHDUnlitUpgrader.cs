@@ -1,5 +1,4 @@
 using UnityEngine;
-using System.Collections.Generic;
 
 namespace UnityEditor.Experimental.Rendering.HDPipeline
 {
