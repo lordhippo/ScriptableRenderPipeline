@@ -21,6 +21,12 @@ void GetSurfaceAndBuiltinData(inout FragInputs input, float3 V, inout PositionIn
 {
 #ifdef ENABLE_TERRAIN_PERPIXEL_NORMAL
     {
+        // Consider a flat terrain.It should have tangent be(1, 0, 0) and bitangent be(0, 0, 1) as the UV of the terrain grid mesh is a scale of the world XZ position.
+        // In CreateWorldToTangent function(in SpaceTransform.hlsl), it is cross(normal, tangent) * sgn for the bitangent vector.
+        // It is not true in a left - handed coordinate system for the terrain bitangent, if we provide 1 as the tangent.w.It would produce(0, 0, -1) instead of(0, 0, 1).
+        // Also terrain's tangent calculation was wrong in a left handed system because I used `cross((0,0,1), terrainNormalOS)`. It points to the wrong direction as negative X.
+        // Therefore all the 4 xyzw components of the tangent needs to be flipped to correct the tangent frame.
+        // (See ApplyMeshModification in TerrainLitDataMeshModification.hlsl)
         float3 normalOS = SAMPLE_TEXTURE2D(_TerrainNormalmapTexture, sampler_Control0, (input.texCoord0.xy + 0.5f) * _TerrainHeightmapRecipSize.xy).rgb * 2 - 1;
         float3 normalWS = mul((float3x3)GetObjectToWorldMatrix(), normalOS);
         float4 tangentWS;
