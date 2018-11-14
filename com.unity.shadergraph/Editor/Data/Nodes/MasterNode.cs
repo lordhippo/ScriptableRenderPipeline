@@ -5,8 +5,8 @@ using UnityEditor.Graphing;
 using UnityEditor.Graphing.Util;
 using UnityEngine;
 using UnityEngine.Experimental.Rendering;
-using UnityEngine.Experimental.UIElements;
 using UnityEngine.Rendering;
+using UnityEngine.UIElements;
 
 namespace UnityEditor.ShaderGraph
 {
@@ -22,7 +22,7 @@ namespace UnityEditor.ShaderGraph
 
         public override bool hasPreview
         {
-            get { return true; }
+            get { return false; }
         }
 
         public override bool allowedInSubGraph

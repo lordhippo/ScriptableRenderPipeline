@@ -4,17 +4,17 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
-using UnityEditor.Experimental.UIElements;
 using UnityEditor.Graphing.Util;
 using UnityEngine;
 using UnityEditor.Graphing;
 using Debug = UnityEngine.Debug;
 using Object = UnityEngine.Object;
-using Edge = UnityEditor.Experimental.UIElements.GraphView.Edge;
-using UnityEditor.Experimental.UIElements.GraphView;
-using UnityEngine.Experimental.Rendering;
-using UnityEngine.Experimental.UIElements;
 using UnityEngine.Rendering;
+
+using UnityEditor.UIElements;
+using Edge = UnityEditor.Experimental.GraphView.Edge;
+using UnityEditor.Experimental.GraphView;
+using UnityEngine.UIElements;
 
 namespace UnityEditor.ShaderGraph.Drawing
 {
@@ -56,7 +56,7 @@ namespace UnityEditor.ShaderGraph.Drawing
                     m_GraphEditorView.convertToSubgraphRequested += ToSubGraph;
                     m_GraphEditorView.showInProjectRequested += PingAsset;
                     m_GraphEditorView.RegisterCallback<GeometryChangedEvent>(OnGeometryChanged);
-                    this.GetRootVisualContainer().Add(graphEditorView);
+                    this.rootVisualElement.Add(graphEditorView);
                 }
             }
         }
@@ -129,7 +129,7 @@ namespace UnityEditor.ShaderGraph.Drawing
                     var asset = AssetDatabase.LoadAssetAtPath<Object>(AssetDatabase.GUIDToAssetPath(selectedGuid));
                     graphEditorView = new GraphEditorView(this, materialGraph)
                     {
-                        persistenceKey = selectedGuid,
+                        viewDataKey = selectedGuid,
                         assetName = asset.name.Split('/').Last()
                     };
                     m_ColorSpace = PlayerSettings.colorSpace;
@@ -193,6 +193,9 @@ namespace UnityEditor.ShaderGraph.Drawing
                 var path = AssetDatabase.GUIDToAssetPath(selectedGuid);
                 if (string.IsNullOrEmpty(path) || graphObject == null)
                     return;
+
+                bool VCSEnabled = (VersionControl.Provider.enabled && VersionControl.Provider.isActive);
+                CheckoutIfValid(path, VCSEnabled);
 
                 if (m_GraphObject.graph.GetType() == typeof(MaterialGraph))
                     UpdateShaderGraphOnDisk(path);
@@ -512,7 +515,7 @@ namespace UnityEditor.ShaderGraph.Drawing
 
                 graphEditorView = new GraphEditorView(this, m_GraphObject.graph as AbstractMaterialGraph)
                 {
-                    persistenceKey = selectedGuid,
+                    viewDataKey = selectedGuid,
                     assetName = asset.name.Split('/').Last()
                 };
                 m_FrameAllAfterLayout = true;
@@ -539,6 +542,25 @@ namespace UnityEditor.ShaderGraph.Drawing
             m_FrameAllAfterLayout = false;
             foreach (var node in m_GraphObject.graph.GetNodes<AbstractMaterialNode>())
                 node.Dirty(ModificationScope.Node);
+        }
+
+        void CheckoutIfValid(string path, bool VCSEnabled)
+        {
+            if (VCSEnabled)
+            {
+                var asset = VersionControl.Provider.GetAssetByPath(path);
+                if (asset != null)
+                {
+                    if (VersionControl.Provider.CheckoutIsValid(asset))
+                    {
+                        var task = VersionControl.Provider.Checkout(asset, VersionControl.CheckoutMode.Both);
+                        task.Wait();
+
+                        if (!task.success)
+                            Debug.Log(task.text + " " + task.resultCode);
+                    }
+                }
+            }
         }
     }
 }
