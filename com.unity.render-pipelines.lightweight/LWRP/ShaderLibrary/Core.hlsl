@@ -145,6 +145,11 @@ half ComputeFogFactor(float z)
 
 void ApplyFogColor(inout half3 color, half3 fogColor, half fogFactor)
 {
+#if defined(UNITY_COLORSPACE_GAMMA)
+    #include "CoreRP/ShaderLibrary/Color.hlsl"
+    fogColor = FastSRGBToLinear(fogColor);
+#endif
+
 #if defined(FOG_LINEAR) || defined(FOG_EXP) || defined(FOG_EXP2)
 #if defined(FOG_EXP)
     // factor = exp(-density*z)

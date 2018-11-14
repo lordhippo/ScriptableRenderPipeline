@@ -510,6 +510,13 @@ uint GetMipCount(Texture2D tex)
 #endif
 }
 
+#if defined(UNITY_COLORSPACE_GAMMA)
+    #include "Color.hlsl"
+    #define SAMPLE_TEXTURE2D_COLOR(textureName, samplerName, coord2) FastSRGBToLinear(SAMPLE_TEXTURE2D(textureName, samplerName, coord2))
+#else
+    #define SAMPLE_TEXTURE2D_COLOR(textureName, samplerName, coord2) SAMPLE_TEXTURE2D(textureName, samplerName, coord2)
+#endif
+
 // ----------------------------------------------------------------------------
 // Texture format sampling
 // ----------------------------------------------------------------------------

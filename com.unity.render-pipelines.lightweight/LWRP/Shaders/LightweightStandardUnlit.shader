@@ -50,6 +50,9 @@ Shader "LightweightPipeline/Standard Unlit"
             // Lighting include is needed because of GI
             #include "LWRP/ShaderLibrary/Lighting.hlsl"
             #include "LWRP/ShaderLibrary/InputSurfaceUnlit.hlsl"
+#if defined(UNITY_COLORSPACE_GAMMA)
+            #include "CoreRP/ShaderLibrary/Color.hlsl"
+#endif
 
             struct VertexInput
             {
@@ -103,7 +106,10 @@ Shader "LightweightPipeline/Standard Unlit"
                 UNITY_SETUP_INSTANCE_ID(IN);
 
                 half2 uv = IN.uv0AndFogCoord.xy;
-                half4 texColor = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, uv);
+                half4 texColor = SAMPLE_TEXTURE2D_COLOR(_MainTex, sampler_MainTex, uv);
+#if defined(UNITY_COLORSPACE_GAMMA)
+                _Color = FastSRGBToLinear(_Color);
+#endif
                 half3 color = texColor.rgb * _Color.rgb;
                 half alpha = texColor.a * _Color.a;
                 AlphaDiscard(alpha, _Cutoff);
@@ -122,6 +128,10 @@ Shader "LightweightPipeline/Standard Unlit"
                 color += SAMPLE_GI(IN.lightmapUV, IN.vertexSH, normalWS);
 #endif
                 ApplyFog(color, IN.uv0AndFogCoord.z);
+
+#if defined(UNITY_COLORSPACE_GAMMA)
+                color = FastLinearToSRGB(color);
+#endif
 
                 return half4(color, alpha);
             }

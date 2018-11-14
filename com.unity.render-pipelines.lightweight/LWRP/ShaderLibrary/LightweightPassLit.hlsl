@@ -2,6 +2,9 @@
 #define LIGHTWEIGHT_PASS_LIT_INCLUDED
 
 #include "LWRP/ShaderLibrary/Lighting.hlsl"
+#if defined(UNITY_COLORSPACE_GAMMA)
+#include "CoreRP/ShaderLibrary/Color.hlsl"
+#endif
 
 struct LightweightVertexInput
 {
@@ -140,6 +143,11 @@ half4 LitPassFragment(LightweightVertexOutput IN) : SV_Target
     half4 color = LightweightFragmentPBR(inputData, surfaceData.albedo, surfaceData.metallic, surfaceData.specular, surfaceData.smoothness, surfaceData.occlusion, surfaceData.emission, surfaceData.alpha);
 
     ApplyFog(color.rgb, inputData.fogCoord);
+
+#if defined(UNITY_COLORSPACE_GAMMA)
+    color = FastLinearToSRGB(color);
+#endif
+
     return color;
 }
 
