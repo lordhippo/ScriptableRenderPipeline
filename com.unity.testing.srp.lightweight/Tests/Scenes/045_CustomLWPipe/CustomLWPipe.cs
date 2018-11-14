@@ -78,6 +78,21 @@ internal class ForwardOpaquesPass : ScriptableRenderPass
 
         Camera camera = renderingData.cameraData.camera;
         XRUtils.DrawOcclusionMesh(cmd, camera, renderingData.cameraData.isStereoEnabled);
+
+        int mainLightIndex = renderingData.lightData.mainLightIndex;
+        if (mainLightIndex != 1)
+        {
+            VisibleLight mainLight = renderingData.lightData.visibleLights[mainLightIndex];
+            Vector4 lightDirection = -mainLight.localToWorldMatrix.GetColumn(2);
+            cmd.SetGlobalVector("_MainLightPosition", new Vector4(lightDirection.x, lightDirection.y, lightDirection.z, 1.0f));
+            cmd.SetGlobalVector("_MainLightColor", mainLight.finalColor);
+        }
+        else
+        {
+            cmd.SetGlobalVector("_MainLightPosition", new Vector4(1.0f, 0.0f, 0.0f, 1.0f));
+            cmd.SetGlobalVector("_MainLightColor", new Vector4(0.0f, 0.0f, 0.0f, 1.0f));
+        }
+
         context.ExecuteCommandBuffer(cmd);
         CommandBufferPool.Release(cmd);
 
