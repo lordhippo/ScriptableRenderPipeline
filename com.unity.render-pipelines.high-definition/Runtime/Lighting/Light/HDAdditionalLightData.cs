@@ -622,7 +622,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
             if (timelineWorkaround.oldLocalScale != transform.localScale)
                 lightSize = transform.localScale;
             else
-                lightSize = new Vector3(shapeWidth, shapeHeight, 0);
+                lightSize = new Vector3(shapeWidth, shapeHeight, transform.localScale.z);
 
             lightSize = Vector3.Max(Vector3.one * k_MinAreaWidth, lightSize);
             m_Light.transform.localScale = lightSize;
