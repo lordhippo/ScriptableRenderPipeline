@@ -7,7 +7,7 @@ using UnityEditor.ShaderGraph;
 using UnityEditor.ShaderGraph.Drawing;
 using UnityEditor.ShaderGraph.Drawing.Controls;
 using UnityEngine;
-using UnityEngine.Experimental.UIElements;
+using UnityEngine.UIElements;
 using UnityEngine.Experimental.Rendering.HDPipeline;
 
 
@@ -487,7 +487,7 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline
             }
 
             // Diffusion Profile
-            if (MaterialTypeUsesSlotMask(SlotMask.DiffusionProfile))
+            if (MaterialTypeUsesSlotMask(SlotMask.DiffusionProfile) && (subsurfaceScattering.isOn || transmission.isOn))
             {
                 AddSlot(new DiffusionProfileInputMaterialSlot(DiffusionProfileSlotId, DiffusionProfileSlotName, DiffusionProfileSlotName, ShaderStageCapability.Fragment));
                 validSlots.Add(DiffusionProfileSlotId);

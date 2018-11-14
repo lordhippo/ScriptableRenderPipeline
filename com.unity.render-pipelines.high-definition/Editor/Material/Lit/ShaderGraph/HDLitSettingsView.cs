@@ -1,14 +1,14 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using UnityEditor.Experimental.Rendering.HDPipeline;
-using UnityEditor.Experimental.UIElements;
+using UnityEditor.UIElements;
 using UnityEngine;
-using UnityEngine.Experimental.UIElements;
+using UnityEngine.UIElements;
 using UnityEditor.Graphing.Util;
 using UnityEditor.ShaderGraph;
 using UnityEditor.ShaderGraph.Drawing;
 using UnityEditor.ShaderGraph.Drawing.Controls;
+using UnityEditor.Experimental.Rendering.HDPipeline;
 using UnityEngine.Experimental.Rendering.HDPipeline;
 
 namespace UnityEditor.Experimental.Rendering.HDPipeline.Drawing
@@ -40,7 +40,7 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline.Drawing
                 row.Add(new EnumField(SurfaceType.Opaque), (field) =>
                 {
                     field.value = m_Node.surfaceType;
-                    field.OnValueChanged(ChangeSurfaceType);
+                    field.RegisterValueChangedCallback(ChangeSurfaceType);
                 });
             });
 
@@ -49,12 +49,12 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline.Drawing
                 ++indentLevel;
                 if (!m_Node.HasRefraction())
                 {
-                    ps.Add(new PropertyRow(CreateLabel("Blend Mode", indentLevel)), (row) =>
+                    ps.Add(new PropertyRow(CreateLabel("Blending Mode", indentLevel)), (row) =>
                     {
                         row.Add(new EnumField(HDLitMasterNode.AlphaModeLit.Additive), (field) =>
                         {
                             field.value = GetAlphaModeLit(m_Node.alphaMode);
-                            field.OnValueChanged(ChangeBlendMode);
+                            field.RegisterValueChangedCallback(ChangeBlendMode);
                         });
                     });
                 }
@@ -93,7 +93,7 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline.Drawing
                         row.Add(new EnumField(ScreenSpaceRefraction.RefractionModel.None), (field) =>
                         {
                             field.value = m_Node.refractionModel;
-                            field.OnValueChanged(ChangeRefractionModel);
+                            field.RegisterValueChangedCallback(ChangeRefractionModel);
                         });
                     });
                 }
@@ -115,7 +115,7 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline.Drawing
                         row.Add(new EnumField(DistortionMode.Add), (field) =>
                         {
                             field.value = m_Node.distortionMode;
-                            field.OnValueChanged(ChangeDistortionMode);
+                            field.RegisterValueChangedCallback(ChangeDistortionMode);
                         });
                     });
                     ps.Add(new PropertyRow(CreateLabel("Depth Test", indentLevel)), (row) =>
@@ -144,7 +144,7 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline.Drawing
                     row.Add(m_SortPiorityField, (field) =>
                     {
                         field.value = m_Node.sortPriority;
-                        field.OnValueChanged(ChangeSortPriority);
+                        field.RegisterValueChangedCallback(ChangeSortPriority);
                     });
                 });
                 --indentLevel;
@@ -187,7 +187,7 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline.Drawing
                 row.Add(new EnumField(DoubleSidedMode.Disabled), (field) =>
                 {
                     field.value = m_Node.doubleSidedMode;
-                    field.OnValueChanged(ChangeDoubleSidedMode);
+                    field.RegisterValueChangedCallback(ChangeDoubleSidedMode);
                 });
             });
 
@@ -196,7 +196,7 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline.Drawing
                 row.Add(new EnumField(HDLitMasterNode.MaterialType.Standard), (field) =>
                 {
                     field.value = m_Node.materialType;
-                    field.OnValueChanged(ChangeMaterialType);
+                    field.RegisterValueChangedCallback(ChangeMaterialType);
                 });
             });
 
@@ -258,7 +258,7 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline.Drawing
                 row.Add(new EnumField(SpecularOcclusionMode.Off), (field) =>
                 {
                     field.value = m_Node.specularOcclusionMode;
-                    field.OnValueChanged(ChangeSpecularOcclusionMode);
+                    field.RegisterValueChangedCallback(ChangeSpecularOcclusionMode);
                 });
             });
 
