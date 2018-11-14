@@ -77,7 +77,6 @@ Shader "Hidden/HDRenderPipeline/Deferred"
             // deferred material must replace the old one here. If in the future we want to support multiple layout (cause a lot of consistency problem),
             // the deferred shader will require to use multicompile.
             #include "Packages/com.unity.render-pipelines.high-definition/Runtime/Material/Lit/Lit.hlsl"
-            #include "Packages/com.unity.render-pipelines.high-definition/Runtime/Material/MaterialGBufferMacros.hlsl"
             #include "Packages/com.unity.render-pipelines.high-definition/Runtime/Lighting/LightLoop/LightLoop.hlsl"
 
             //-------------------------------------------------------------------------------------
