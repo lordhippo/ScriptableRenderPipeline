@@ -10,6 +10,13 @@
 
 CBUFFER_START(UnityPerMaterial)
 float4 _MainTex_ST;
+
+half _ClothRimScale;
+half _ClothRimExp;
+half _ClothInnerScale;
+half _ClothInnerExp;
+half _ClothLambertScale;
+
 half4 _Color;
 half4 _SpecColor;
 half4 _EmissionColor;

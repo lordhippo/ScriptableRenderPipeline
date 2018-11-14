@@ -3,6 +3,16 @@ Shader "LightweightPipeline/Standard (Physically Based)"
     Properties
     {
         // Specular vs Metallic workflow
+        [HideInInspector] _DiffuseModel("DiffuseModel", Float) = 0.0
+
+        // Cloth model specific parameters
+        _ClothRimScale ("Cloth Rim Scale", Range(0.0, 1.0)) = 1
+		_ClothRimExp ("Cloth Rim Exp", Range(0.1, 100.0)) = 1
+		_ClothInnerScale ("Cloth Inner Scale", Range(0.0, 1.0)) = 1
+		_ClothInnerExp("Cloth Inner Exp", Range(0.1, 100.0)) = 1
+		_ClothLambertScale ("Lamber Scale", Range(0.0, 1.0)) = 1
+
+        // Specular vs Metallic workflow
         [HideInInspector] _WorkflowMode("WorkflowMode", Float) = 1.0
 
         _Color("Color", Color) = (0.5,0.5,0.5,1)
@@ -83,6 +93,9 @@ Shader "LightweightPipeline/Standard (Physically Based)"
 
             // -------------------------------------
             // Material Keywords
+            #pragma shader_feature _DIFFUSEMODEL_CLOTH
+            #pragma shader_feature _DIFFUSEMODEL_SKIN
+
             #pragma shader_feature _NORMALMAP
             #pragma shader_feature _ALPHATEST_ON
             #pragma shader_feature _ALPHAPREMULTIPLY_ON

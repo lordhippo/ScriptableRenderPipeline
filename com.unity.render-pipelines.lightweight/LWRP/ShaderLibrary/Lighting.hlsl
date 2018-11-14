@@ -6,6 +6,9 @@
 #include "CoreRP/ShaderLibrary/ImageBasedLighting.hlsl"
 #include "Core.hlsl"
 #include "Shadows.hlsl"
+#if defined(UNITY_COLORSPACE_GAMMA)
+#include "CoreRP/ShaderLibrary/Color.hlsl"
+#endif
 
 // If lightmap is not defined than we evaluate GI (ambient + probes) from SH
 // We might do it fully or partially in vertex to save shader ALU
@@ -144,7 +147,11 @@ Light GetMainLight()
     light.direction = _MainLightPosition.xyz;
     light.attenuation = 1.0;
     light.subtractiveModeAttenuation = _MainLightPosition.w;
+#if defined(UNITY_COLORSPACE_GAMMA)
+    light.color = FastSRGBToLinear(_MainLightColor.rgb);
+#else
     light.color = _MainLightColor.rgb;
+#endif
 
     return light;
 }
@@ -168,7 +175,11 @@ Light GetLight(half i, float3 positionWS)
     // objects granularity level. We will only be able to do that when scriptable culling kicks in.
     // TODO: Use StructuredBuffer on PC/Console and profile access speed on mobile that support it.
     lightInput.position = _AdditionalLightPosition[lightIndex];
+#if defined(UNITY_COLORSPACE_GAMMA)
+    lightInput.color = FastSRGBToLinear(_AdditionalLightColor[lightIndex].rgb);
+#else
     lightInput.color = _AdditionalLightColor[lightIndex].rgb;
+#endif
     lightInput.distanceAttenuation = _AdditionalLightDistanceAttenuation[lightIndex];
     lightInput.spotDirection = _AdditionalLightSpotDir[lightIndex];
     lightInput.spotAttenuation = _AdditionalLightSpotAttenuation[lightIndex];
@@ -281,6 +292,18 @@ half3 EnvironmentBRDF(BRDFData brdfData, half3 indirectDiffuse, half3 indirectSp
 // * Fresnel approximated with 1/LdotH
 half3 DirectBDRF(BRDFData brdfData, half3 normalWS, half3 lightDirectionWS, half3 viewDirectionWS)
 {
+#ifdef _DIFFUSEMODEL_CLOTH
+    half vDotN = saturate(dot(normalWS, viewDirectionWS));
+
+    half rim = _ClothRimExp * _ClothRimScale * pow(1.f - vDotN, _ClothRimExp);
+    half inner = _ClothInnerExp * _ClothInnerScale * pow(vDotN, _ClothInnerExp);
+
+    half clothTerm = (rim + inner + _ClothLambertScale);
+    //clothTerm /= _ClothRimScale + _ClothInnerScale + _ClothLambertScale;
+
+    brdfData.diffuse *= clothTerm;
+#endif
+
 #ifndef _SPECULARHIGHLIGHTS_OFF
     half3 halfDir = SafeNormalize(lightDirectionWS + viewDirectionWS);
 

@@ -18,8 +18,22 @@ namespace UnityEditor
             AlbedoAlpha,
         }
 
+        public enum DiffuseModel
+        {
+            Simple = 0,
+            Cloth,
+            Skin
+        }
+
         private static class Styles
         {
+            public static string clothProperties = "Cloth Properties";
+            public static GUIContent clothRimScaleText = new GUIContent("Rim Scale", "Cloth Rim Scale");
+            public static GUIContent clothRimExpText = new GUIContent("Rim Exp", "Cloth Rim Exp");
+            public static GUIContent clothInnerScaleText = new GUIContent("Inner Scale", "Cloth Inner Scale");
+            public static GUIContent clothInnerExpText = new GUIContent("Inner Exp", "Cloth Inner Exp");
+            public static GUIContent clothLambertScaleText = new GUIContent("Lambert Scale", "Cloth Lambert Scale");
+
             public static GUIContent albedoText = new GUIContent("Albedo", "Albedo (RGB) and Transparency (A)");
             public static GUIContent specularMapText = new GUIContent("Specular", "Specular (RGB) and Smoothness (A)");
             public static GUIContent metallicMapText = new GUIContent("Metallic", "Metallic (R) and Smoothness (A)");
@@ -35,11 +49,21 @@ namespace UnityEditor
             public static GUIContent fixNow = new GUIContent("Fix now");
 
             public static string surfaceProperties = "Surface Properties";
+            public static string diffuseModelText = "Diffuse Model";
+            public static readonly string[] diffuseModelNames = Enum.GetNames(typeof(DiffuseModel));
             public static string workflowModeText = "Workflow Mode";
             public static readonly string[] workflowNames = Enum.GetNames(typeof(WorkflowMode));
             public static readonly string[] metallicSmoothnessChannelNames = {"Metallic Alpha", "Albedo Alpha"};
             public static readonly string[] specularSmoothnessChannelNames = {"Specular Alpha", "Albedo Alpha"};
         }
+
+        private MaterialProperty diffuseModel;
+
+        private MaterialProperty clothRimScale;
+        private MaterialProperty clothRimExp;
+        private MaterialProperty clothInnerScale;
+        private MaterialProperty clothInnerExp;
+        private MaterialProperty clothLambertScale;
 
         private MaterialProperty workflowMode;
 
@@ -67,6 +91,14 @@ namespace UnityEditor
         public override void FindProperties(MaterialProperty[] properties)
         {
             base.FindProperties(properties);
+
+            diffuseModel = FindProperty("_DiffuseModel", properties);
+
+            clothRimScale = FindProperty("_ClothRimScale", properties);
+            clothRimExp = FindProperty("_ClothRimExp", properties);
+            clothInnerScale = FindProperty("_ClothInnerScale", properties);
+            clothInnerExp = FindProperty("_ClothInnerExp", properties);
+            clothLambertScale = FindProperty("_ClothLambertScale", properties);
 
             workflowMode = FindProperty("_WorkflowMode", properties);
             albedoColor = FindProperty("_Color", properties);
@@ -106,6 +138,8 @@ namespace UnityEditor
             // Detect any changes to the material
             EditorGUI.BeginChangeCheck();
             {
+                DoDiffuseModelArea();
+
                 DoPopup(Styles.workflowModeText, workflowMode, Styles.workflowNames);
                 base.ShaderPropertiesGUI(material);
                 GUILayout.Label(Styles.surfaceProperties, EditorStyles.boldLabel);
@@ -186,6 +220,29 @@ namespace UnityEditor
             }
 
             MaterialChanged(material);
+        }
+
+        void DoDiffuseModelArea()
+        {
+            DoPopup(Styles.diffuseModelText, diffuseModel, Styles.diffuseModelNames);
+            if ((DiffuseModel) diffuseModel.floatValue == DiffuseModel.Cloth)
+            {
+                GUILayout.Label(Styles.clothProperties, EditorStyles.boldLabel);
+
+                GUILayout.BeginHorizontal();
+                m_MaterialEditor.ShaderProperty(clothRimScale, Styles.clothRimScaleText);
+                m_MaterialEditor.ShaderProperty(clothRimExp, Styles.clothRimExpText);
+                GUILayout.EndHorizontal();
+
+                GUILayout.BeginHorizontal();
+                m_MaterialEditor.ShaderProperty(clothInnerScale, Styles.clothInnerScaleText);
+                m_MaterialEditor.ShaderProperty(clothInnerExp, Styles.clothInnerExpText);
+                GUILayout.EndHorizontal();
+
+                m_MaterialEditor.ShaderProperty(clothLambertScale, Styles.clothLambertScaleText);
+            }
+
+            GUILayout.Space(10);
         }
 
         void DoAlbedoArea()
@@ -271,6 +328,10 @@ namespace UnityEditor
 
         static void SetMaterialKeywords(Material material)
         {
+            var diffuseModel = (DiffuseModel) material.GetFloat("_DiffuseModel");
+            CoreUtils.SetKeyword(material, "_DIFFUSEMODEL_CLOTH", diffuseModel == DiffuseModel.Cloth);
+            CoreUtils.SetKeyword(material, "_DIFFUSEMODEL_SKIN", diffuseModel == DiffuseModel.Skin);
+
             // Note: keywords must be based on Material value not on MaterialProperty due to multi-edit & material animation
             // (MaterialProperty value might come from renderer material property block)
             bool isSpecularWorkFlow = (WorkflowMode)material.GetFloat("_WorkflowMode") == WorkflowMode.Specular;
