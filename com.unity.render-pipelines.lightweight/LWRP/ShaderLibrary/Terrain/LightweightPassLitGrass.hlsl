@@ -74,7 +74,7 @@ void InitializeVertData(GrassVertexInput IN, inout GrassVertexOutput vertData)
     OUTPUT_LIGHTMAP_UV(IN.lightmapUV, unity_LightmapST, vertData.lightmapUV);
     OUTPUT_SH(vertData.normal.xyz, vertData.vertexSH);
 
-    half3 vertexLight = VertexLighting(vertData.posWSShininess.xyz, vertData.normal.xyz);
+    half3 vertexLight = VertexLighting(vertData.posWSShininess.xyz, vertData.normal.xyz, viewDir);
     half fogFactor = ComputeFogFactor(vertData.clipPos.z);
     vertData.fogFactorAndVertexLight = half4(fogFactor, vertexLight);
 

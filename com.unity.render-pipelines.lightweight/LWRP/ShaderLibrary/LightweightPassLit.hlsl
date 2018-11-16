@@ -110,7 +110,7 @@ LightweightVertexOutput LitPassVertex(LightweightVertexInput v)
     OUTPUT_LIGHTMAP_UV(v.lightmapUV, unity_LightmapST, o.lightmapUV);
     OUTPUT_SH(o.normal.xyz, o.vertexSH);
 
-    half3 vertexLight = VertexLighting(posWS, o.normal.xyz);
+    half3 vertexLight = VertexLighting(posWS, o.normal.xyz, viewDir);
     half fogFactor = ComputeFogFactor(o.clipPos.z);
     o.fogFactorAndVertexLight = half4(fogFactor, vertexLight);
 
@@ -129,6 +129,67 @@ LightweightVertexOutput LitPassVertex(LightweightVertexInput v)
     return o;
 }
 
+//=================================================================================================
+//
+//  Baking Lab
+//  by MJP and David Neubelt
+//  http://mynameismjp.wordpress.com/
+//
+//  All code licensed under the MIT license
+//
+//=================================================================================================
+
+// The code in this file was originally written by Stephen Hill (@self_shadow), who deserves all
+// credit for coming up with this fit and implementing it. Buy him a beer next time you see him. :)
+
+// sRGB => XYZ => D65_2_D60 => AP1 => RRT_SAT
+static const float3x3 ACESInputMat =
+{
+    {0.59719, 0.35458, 0.04823},
+    {0.07600, 0.90834, 0.01566},
+    {0.02840, 0.13383, 0.83777}
+};
+
+// ODT_SAT => XYZ => D60_2_D65 => sRGB
+static const float3x3 ACESOutputMat =
+{
+    { 1.60475, -0.53108, -0.07367},
+    {-0.10208,  1.10813, -0.00605},
+    {-0.00327, -0.07276,  1.07602}
+};
+
+float3 RRTAndODTFit(float3 v)
+{
+    float3 a = v * (v + 0.0245786f) - 0.000090537f;
+    float3 b = v * (0.983729f * v + 0.4329510f) + 0.238081f;
+    return a / b;
+}
+
+float3 ACESFitted(float3 color)
+{
+    color = mul(ACESInputMat, color);
+
+    // Apply RRT and ODT
+    color = RRTAndODTFit(color);
+
+    color = mul(ACESOutputMat, color);
+
+    // Clamp to [0, 1]
+    color = saturate(color);
+
+    return color;
+}
+
+float3 ACESLumaFit( float3 x )
+{
+    float a = 2.51f;
+    float b = 0.03f;
+    float c = 2.43f;
+    float d = 0.59f;
+    float e = 0.14f;
+    return saturate((x*(a*x+b))/(x*(c*x+d)+e));
+}
+
 // Used in Standard (Physically Based) shader
 half4 LitPassFragment(LightweightVertexOutput IN) : SV_Target
 {
@@ -143,6 +204,9 @@ half4 LitPassFragment(LightweightVertexOutput IN) : SV_Target
     half4 color = LightweightFragmentPBR(inputData, surfaceData.albedo, surfaceData.metallic, surfaceData.specular, surfaceData.smoothness, surfaceData.occlusion, surfaceData.emission, surfaceData.alpha);
 
     ApplyFog(color.rgb, inputData.fogCoord);
+
+    color.rgb = ACESFitted(color.rgb * 1.3334);
+    //color.rgb = ACESLumaFit(color.rgb);
 
 #if defined(UNITY_COLORSPACE_GAMMA)
     color = FastLinearToSRGB(color);

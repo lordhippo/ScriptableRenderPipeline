@@ -34,6 +34,9 @@ namespace UnityEditor
             public static GUIContent clothInnerExpText = new GUIContent("Inner Exp", "Cloth Inner Exp");
             public static GUIContent clothLambertScaleText = new GUIContent("Lambert Scale", "Cloth Lambert Scale");
 
+            public static string skinProperties = "Skin Properties";
+            public static GUIContent skinCurvatureText = new GUIContent("Curvature", "Skin Curvature");
+
             public static GUIContent albedoText = new GUIContent("Albedo", "Albedo (RGB) and Transparency (A)");
             public static GUIContent specularMapText = new GUIContent("Specular", "Specular (RGB) and Smoothness (A)");
             public static GUIContent metallicMapText = new GUIContent("Metallic", "Metallic (R) and Smoothness (A)");
@@ -64,6 +67,8 @@ namespace UnityEditor
         private MaterialProperty clothInnerScale;
         private MaterialProperty clothInnerExp;
         private MaterialProperty clothLambertScale;
+
+        private MaterialProperty skinCurvature;
 
         private MaterialProperty workflowMode;
 
@@ -99,6 +104,8 @@ namespace UnityEditor
             clothInnerScale = FindProperty("_ClothInnerScale", properties);
             clothInnerExp = FindProperty("_ClothInnerExp", properties);
             clothLambertScale = FindProperty("_ClothLambertScale", properties);
+
+            skinCurvature = FindProperty("_SkinCurvature", properties);
 
             workflowMode = FindProperty("_WorkflowMode", properties);
             albedoColor = FindProperty("_Color", properties);
@@ -240,6 +247,12 @@ namespace UnityEditor
                 GUILayout.EndHorizontal();
 
                 m_MaterialEditor.ShaderProperty(clothLambertScale, Styles.clothLambertScaleText);
+            }
+            else if ((DiffuseModel) diffuseModel.floatValue == DiffuseModel.Skin)
+            {
+                GUILayout.Label(Styles.skinProperties, EditorStyles.boldLabel);
+
+                m_MaterialEditor.ShaderProperty(skinCurvature, Styles.skinCurvatureText);
             }
 
             GUILayout.Space(10);

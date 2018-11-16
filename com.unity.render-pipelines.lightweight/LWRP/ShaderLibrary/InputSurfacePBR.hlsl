@@ -11,11 +11,15 @@
 CBUFFER_START(UnityPerMaterial)
 float4 _MainTex_ST;
 
+#ifdef _DIFFUSEMODEL_CLOTH
 half _ClothRimScale;
 half _ClothRimExp;
 half _ClothInnerScale;
 half _ClothInnerExp;
 half _ClothLambertScale;
+#elif _DIFFUSEMODEL_SKIN
+half _SkinCurvature;
+#endif
 
 half4 _Color;
 half4 _SpecColor;

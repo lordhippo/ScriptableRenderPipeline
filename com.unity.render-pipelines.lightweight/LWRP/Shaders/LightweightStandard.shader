@@ -12,6 +12,9 @@ Shader "LightweightPipeline/Standard (Physically Based)"
 		_ClothInnerExp("Cloth Inner Exp", Range(0.1, 100.0)) = 1
 		_ClothLambertScale ("Lamber Scale", Range(0.0, 1.0)) = 1
 
+		// Skin model specific parameters
+        _SkinCurvature ("Skin Curvature", Range(0.0, 1.0)) = 0.5
+
         // Specular vs Metallic workflow
         [HideInInspector] _WorkflowMode("WorkflowMode", Float) = 1.0
 

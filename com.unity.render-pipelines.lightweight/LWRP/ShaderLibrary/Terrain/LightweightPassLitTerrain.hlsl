@@ -121,7 +121,8 @@ VertexOutput SplatmapVert(VertexInput v)
     o.normal = TransformObjectToWorldNormal(v.normal);
 #endif
     o.fogFactorAndVertexLight.x = ComputeFogFactor(clipPos.z);
-    o.fogFactorAndVertexLight.yzw = VertexLighting(positionWS, o.normal);
+    half3 viewDir = VertexViewDirWS(GetCameraPositionWS() - positionWS);
+    o.fogFactorAndVertexLight.yzw = VertexLighting(positionWS, o.normal, viewDir);
     o.positionWS = positionWS;
     o.clipPos = clipPos;
 

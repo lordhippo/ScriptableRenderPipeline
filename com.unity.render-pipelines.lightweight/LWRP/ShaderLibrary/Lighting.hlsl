@@ -276,8 +276,80 @@ inline void InitializeBRDFData(half3 albedo, half metallic, half3 specular, half
 #endif
 }
 
+#if _DIFFUSEMODEL_SKIN
+half3 SkinTerm(half NdotL, half curvature)
+{
+    NdotL = mad(NdotL, 0.5, 0.5); // map to 0 to 1 range
+    float curva = (1.0/mad(curvature, 0.5 - 0.0625, 0.0625) - 2.0) / (16.0 - 2.0); // curvature is within [0, 1] remap to normalized r from 2 to 16
+    float oneMinusCurva = 1.0 - curva;
+    float3 curve0;
+    {
+        float3 rangeMin = float3(0.0, 0.3, 0.3);
+        float3 rangeMax = float3(1.0, 0.7, 0.7);
+        float3 offset = float3(0.0, 0.06, 0.06);
+        float3 t = saturate( mad(NdotL, 1.0 / (rangeMax - rangeMin), (offset + rangeMin) / (rangeMin - rangeMax)  ) );
+        float3 lowerLine = (t * t) * float3(0.65, 0.5, 0.9);
+        lowerLine.r += 0.045;
+        lowerLine.b *= t.b;
+        float3 m = float3(1.75, 2.0, 1.97);
+        float3 upperLine = mad(NdotL, m, float3(0.99, 0.99, 0.99) -m );
+        upperLine = saturate(upperLine);
+        float3 lerpMin = float3(0.0, 0.35, 0.35);
+        float3 lerpMax = float3(1.0, 0.7 , 0.6 );
+        float3 lerpT = saturate( mad(NdotL, 1.0/(lerpMax-lerpMin), lerpMin/ (lerpMin - lerpMax) ));
+        curve0 = lerp(lowerLine, upperLine, lerpT * lerpT);
+    }
+    float3 curve1;
+    {
+        float3 m = float3(1.95, 2.0, 2.0);
+        float3 upperLine = mad( NdotL, m, float3(0.99, 0.99, 1.0) - m);
+        curve1 = saturate(upperLine);
+    }
+    float oneMinusCurva2 = oneMinusCurva * oneMinusCurva;
+    return lerp(curve0, curve1, mad(oneMinusCurva2, -1.0 * oneMinusCurva2, 1.0) );
+}
+
+half3 SkinTerm(half3 normalWS, half3 lightDirectionWS, half curvature)
+{
+    half NdotL = saturate(dot(normalWS, lightDirectionWS));
+    return SkinTerm(NdotL, curvature);
+}
+#endif
+
+#ifdef _DIFFUSEMODEL_CLOTH
+half3 ClothTerm(half3 normalWS, half3 lightDirectionWS, half3 viewDirectionWS)
+{
+    half vDotN = saturate(dot(normalWS, viewDirectionWS));
+    float NdotL = saturate(dot(normalWS, lightDirectionWS));
+
+    half rim = _ClothRimExp * _ClothRimScale * pow(1.f - vDotN, _ClothRimExp);
+    half inner = _ClothInnerExp * _ClothInnerScale * pow(vDotN, _ClothInnerExp);
+    half lambert = _ClothLambertScale * NdotL;
+
+    half clothTerm = rim + inner + lambert;
+    //clothTerm /= _ClothRimScale + _ClothInnerScale + _ClothLambertScale;
+
+    return clothTerm;
+}
+#endif
+
 half3 EnvironmentBRDF(BRDFData brdfData, half3 indirectDiffuse, half3 indirectSpecular, half fresnelTerm)
 {
+#if defined(UNITY_COLORSPACE_GAMMA)
+    indirectSpecular = FastSRGBToLinear(indirectSpecular);
+#endif
+
+#ifdef _DIFFUSEMODEL_SKIN
+    half3 lumaVec = half3(0.299, 0.587, 0.114);
+
+    half indirectDiffuseLuma = dot (lumaVec, indirectDiffuse);
+
+    half3 skinTerm = SkinTerm(indirectDiffuseLuma, _SkinCurvature);
+    half skinLuma = dot (lumaVec, skinTerm);
+
+    indirectDiffuse *= skinTerm / skinLuma;
+#endif
+
     half3 c = indirectDiffuse * brdfData.diffuse;
     float surfaceReduction = 1.0 / (brdfData.roughness2 + 1.0);
     c += surfaceReduction * indirectSpecular * lerp(brdfData.specular, brdfData.grazingTerm, fresnelTerm);
@@ -290,20 +362,8 @@ half3 EnvironmentBRDF(BRDFData brdfData, half3 indirectDiffuse, half3 indirectSp
 // * NDF [Modified] GGX
 // * Modified Kelemen and Szirmay-​Kalos for Visibility term
 // * Fresnel approximated with 1/LdotH
-half3 DirectBDRF(BRDFData brdfData, half3 normalWS, half3 lightDirectionWS, half3 viewDirectionWS)
+half3 DirectBDRFSpec(BRDFData brdfData, half3 normalWS, half3 lightDirectionWS, half3 viewDirectionWS)
 {
-#ifdef _DIFFUSEMODEL_CLOTH
-    half vDotN = saturate(dot(normalWS, viewDirectionWS));
-
-    half rim = _ClothRimExp * _ClothRimScale * pow(1.f - vDotN, _ClothRimExp);
-    half inner = _ClothInnerExp * _ClothInnerScale * pow(vDotN, _ClothInnerExp);
-
-    half clothTerm = (rim + inner + _ClothLambertScale);
-    //clothTerm /= _ClothRimScale + _ClothInnerScale + _ClothLambertScale;
-
-    brdfData.diffuse *= clothTerm;
-#endif
-
 #ifndef _SPECULARHIGHLIGHTS_OFF
     half3 halfDir = SafeNormalize(lightDirectionWS + viewDirectionWS);
 
@@ -333,11 +393,26 @@ half3 DirectBDRF(BRDFData brdfData, half3 normalWS, half3 lightDirectionWS, half
     specularTerm = clamp(specularTerm, 0.0, 100.0); // Prevent FP16 overflow on mobiles
 #endif
 
-    half3 color = specularTerm * brdfData.specular + brdfData.diffuse;
+    half NdotL = saturate(dot(normalWS, lightDirectionWS));
+    half3 color = specularTerm * brdfData.specular * NdotL;
     return color;
 #else
-    return brdfData.diffuse;
+    return half3(0, 0, 0);
 #endif
+}
+
+half3 DirectBDRFDiffuse(BRDFData brdfData, half3 normalWS, half3 lightDirectionWS, half3 viewDirectionWS)
+{
+    half3 diffuseTerm;
+#ifdef _DIFFUSEMODEL_CLOTH
+    diffuseTerm = ClothTerm(normalWS, lightDirectionWS, viewDirectionWS);
+#elif _DIFFUSEMODEL_SKIN
+    diffuseTerm = SkinTerm(normalWS, lightDirectionWS, _SkinCurvature);
+#else
+    diffuseTerm = saturate(dot(normalWS, lightDirectionWS));
+#endif
+
+    return diffuseTerm * brdfData.diffuse;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -502,10 +577,18 @@ void MixRealtimeAndBakedGI(inout Light light, half3 normalWS, inout half3 bakedG
 ///////////////////////////////////////////////////////////////////////////////
 //                      Lighting Functions                                   //
 ///////////////////////////////////////////////////////////////////////////////
-half3 LightingLambert(half3 lightColor, half3 lightDir, half3 normal)
+half3 LightingDiffuse(half3 lightColor, half3 lightDir, half3 normal, half3 viewDir)
 {
-    half NdotL = saturate(dot(normal, lightDir));
-    return lightColor * NdotL;
+    half3 lighting;
+#ifdef _DIFFUSEMODEL_CLOTH
+    lighting = ClothTerm(normal, lightDir, viewDir);
+#elif _DIFFUSEMODEL_SKIN
+    lighting = SkinTerm(normal, lightDir, _SkinCurvature);
+#else
+    lighting = saturate(dot(normal, lightDir));
+#endif
+
+    return lightColor * lighting;
 }
 
 half3 LightingSpecular(half3 lightColor, half3 lightDir, half3 normal, half3 viewDir, half4 specularGloss, half shininess)
@@ -519,9 +602,10 @@ half3 LightingSpecular(half3 lightColor, half3 lightDir, half3 normal, half3 vie
 
 half3 LightingPhysicallyBased(BRDFData brdfData, half3 lightColor, half3 lightDirectionWS, half lightAttenuation, half3 normalWS, half3 viewDirectionWS)
 {
-    half NdotL = saturate(dot(normalWS, lightDirectionWS));
-    half3 radiance = lightColor * (lightAttenuation * NdotL);
-    return DirectBDRF(brdfData, normalWS, lightDirectionWS, viewDirectionWS) * radiance;
+    half3 diffBrdf = DirectBDRFDiffuse(brdfData, normalWS, lightDirectionWS, viewDirectionWS);
+    half3 specBrdf = DirectBDRFSpec(brdfData, normalWS, lightDirectionWS, viewDirectionWS);
+
+    return (diffBrdf + specBrdf) * lightColor * lightAttenuation;
 }
 
 half3 LightingPhysicallyBased(BRDFData brdfData, Light light, half3 normalWS, half3 viewDirectionWS)
@@ -529,7 +613,7 @@ half3 LightingPhysicallyBased(BRDFData brdfData, Light light, half3 normalWS, ha
     return LightingPhysicallyBased(brdfData, light.color, light.direction, light.attenuation, normalWS, viewDirectionWS);
 }
 
-half3 VertexLighting(float3 positionWS, half3 normalWS)
+half3 VertexLighting(float3 positionWS, half3 normalWS, half3 viewWS)
 {
     half3 vertexLightColor = half3(0.0, 0.0, 0.0);
 
@@ -541,7 +625,7 @@ half3 VertexLighting(float3 positionWS, half3 normalWS)
         Light light = GetLight(lightIter, positionWS);
 
         half3 lightColor = light.color * light.attenuation;
-        vertexLightColor += LightingLambert(lightColor, light.direction, normalWS);
+        vertexLightColor += LightingDiffuse(lightColor, light.direction, normalWS, viewWS);
     }
 #endif
 
@@ -563,6 +647,7 @@ half4 LightweightFragmentPBR(InputData inputData, half3 albedo, half metallic, h
 
     MixRealtimeAndBakedGI(mainLight, inputData.normalWS, inputData.bakedGI, half4(0, 0, 0, 0));
     half3 color = GlobalIllumination(brdfData, inputData.bakedGI, occlusion, inputData.normalWS, inputData.viewDirectionWS);
+
     color += LightingPhysicallyBased(brdfData, mainLight, inputData.normalWS, inputData.viewDirectionWS);
 
 #ifdef _ADDITIONAL_LIGHTS
@@ -587,7 +672,7 @@ half4 LightweightFragmentBlinnPhong(InputData inputData, half3 diffuse, half4 sp
     MixRealtimeAndBakedGI(mainLight, inputData.normalWS, inputData.bakedGI, half4(0, 0, 0, 0));
 
     half3 attenuatedLightColor = mainLight.color * mainLight.attenuation;
-    half3 diffuseColor = inputData.bakedGI + LightingLambert(attenuatedLightColor, mainLight.direction, inputData.normalWS);
+    half3 diffuseColor = inputData.bakedGI + LightingDiffuse(attenuatedLightColor, mainLight.direction, inputData.normalWS, inputData.viewDirectionWS);
     half3 specularColor = LightingSpecular(attenuatedLightColor, mainLight.direction, inputData.normalWS, inputData.viewDirectionWS, specularGloss, shininess);
 
 #ifdef _ADDITIONAL_LIGHTS
@@ -597,7 +682,7 @@ half4 LightweightFragmentBlinnPhong(InputData inputData, half3 diffuse, half4 sp
         Light light = GetLight(i, inputData.positionWS);
         light.attenuation *= LocalLightRealtimeShadowAttenuation(light.index, inputData.positionWS);
         half3 attenuatedLightColor = light.color * light.attenuation;
-        diffuseColor += LightingLambert(attenuatedLightColor, light.direction, inputData.normalWS);
+        diffuseColor += LightingDiffuse(attenuatedLightColor, light.direction, inputData.normalWS, inputData.viewDirectionWS);
         specularColor += LightingSpecular(attenuatedLightColor, light.direction, inputData.normalWS, inputData.viewDirectionWS, specularGloss, shininess);
     }
 #endif
