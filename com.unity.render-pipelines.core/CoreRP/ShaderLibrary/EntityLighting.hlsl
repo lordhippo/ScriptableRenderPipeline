@@ -5,6 +5,11 @@
 
 // TODO: Check if PI is correctly handled!
 
+real3 SHEvalLinearL0(real4 shAr, real4 shAg, real4 shAb)
+{
+    return real3(shAr.a, shAg.a, shAb.a);
+}
+
 // Ref: "Efficient Evaluation of Irradiance Environment Maps" from ShaderX 2
 real3 SHEvalLinearL0L1(real3 N, real4 shAr, real4 shAg, real4 shAb)
 {

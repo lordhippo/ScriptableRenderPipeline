@@ -218,6 +218,8 @@ struct BRDFData
     half roughness;
     half roughness2;
     half grazingTerm;
+    half occlusion;
+    half curvature;
 
     // We save some light invariant BRDF terms so we don't have to recompute
     // them in the light loop. Take a look at DirectBRDF function for detailed explaination.
@@ -245,7 +247,7 @@ half OneMinusReflectivityMetallic(half metallic)
     return oneMinusDielectricSpec - metallic * oneMinusDielectricSpec;
 }
 
-inline void InitializeBRDFData(half3 albedo, half metallic, half3 specular, half smoothness, half alpha, out BRDFData outBRDFData)
+inline void InitializeBRDFData(half3 albedo, half metallic, half3 specular, half smoothness, half alpha, half occlusion, half curvature, out BRDFData outBRDFData)
 {
 #ifdef _SPECULAR_SETUP
     half reflectivity = ReflectivitySpecular(specular);
@@ -274,6 +276,9 @@ inline void InitializeBRDFData(half3 albedo, half metallic, half3 specular, half
     outBRDFData.diffuse *= alpha;
     alpha = alpha * oneMinusReflectivity + reflectivity;
 #endif
+
+    outBRDFData.occlusion = occlusion;
+    outBRDFData.curvature = curvature;
 }
 
 #if _DIFFUSEMODEL_SKIN
@@ -309,22 +314,59 @@ half3 SkinTerm(half NdotL, half curvature)
     return lerp(curve0, curve1, mad(oneMinusCurva2, -1.0 * oneMinusCurva2, 1.0) );
 }
 
-half3 SkinTerm(half3 normalWS, half3 lightDirectionWS, half curvature)
+half3 SkinTerm(half3 normalWS, half3 lightDirectionWS, half curvature, half occlusion)
 {
     half NdotL = saturate(dot(normalWS, lightDirectionWS));
-    return SkinTerm(NdotL, curvature);
+    return SkinTerm(NdotL * occlusion, curvature);
 }
+
+half3 SkinTermIndirect(half3 indirect, half curvature)
+{
+    half3 lumaVec = half3(0.299, 0.587, 0.114);
+
+    half shL0 = SHEvalLinearL0(unity_SHAr, unity_SHAg, unity_SHAb);
+    half indirectLuma = dot (lumaVec, indirect) / dot(lumaVec, shL0);
+
+    half3 skinTerm = SkinTerm(indirectLuma, curvature);
+    half skinLuma = dot (lumaVec, skinTerm);
+    return indirect * skinTerm / skinLuma;
+
+    /*float curva = (1.0/mad(curvature, 0.5 - 0.0625, 0.0625) - 2.0) / (16.0 - 2.0); // curvature is within [0, 1] remap to r distance 2 to 16
+    float oneMinusCurva = 1.0 - curva;
+
+    half zh0;
+    // ZH0
+    {
+        float2 remappedCurva = 1.0 - saturate(curva * float2(3.0, 2.7) );
+        remappedCurva *= remappedCurva;
+        remappedCurva *= remappedCurva;
+        float3 multiplier = float3(1.0/mad(curva, 3.2, 0.4), remappedCurva.x, remappedCurva.y);
+        zh0 = mad(multiplier, float3( 0.061659, 0.00991683, 0.003783), float3(0.868938, 0.885506, 0.885400));
+    }
+    half zh1;
+    // ZH1
+    {
+        float remappedCurva = 1.0 - saturate(curva * 2.7);
+        float3 lowerLine = mad(float3(0.197573092, 0.0117447875, 0.0040980375), (1.0f - remappedCurva * remappedCurva * remappedCurva), float3(0.7672169, 1.009236, 1.017741));
+        float3 upperLine = float3(1.018366, 1.022107, 1.022232);
+        zh1 = lerp(upperLine, lowerLine, oneMinusCurva * oneMinusCurva);
+    }
+
+    //return indirect;
+    return indirect * (zh0 + zh1) * 0.5;*/
+}
+
 #endif
 
 #ifdef _DIFFUSEMODEL_CLOTH
-half3 ClothTerm(half3 normalWS, half3 lightDirectionWS, half3 viewDirectionWS)
+half3 ClothTerm(half3 normalWS, half3 lightDirectionWS, half3 viewDirectionWS, half occlusion)
 {
     half vDotN = saturate(dot(normalWS, viewDirectionWS));
     float NdotL = saturate(dot(normalWS, lightDirectionWS));
 
-    half rim = _ClothRimExp * _ClothRimScale * pow(1.f - vDotN, _ClothRimExp);
+    half rim = _ClothRimExp * _ClothRimScale * pow(1.f - vDotN, _ClothRimExp) * occlusion;
     half inner = _ClothInnerExp * _ClothInnerScale * pow(vDotN, _ClothInnerExp);
-    half lambert = _ClothLambertScale * NdotL;
+    half lambert = _ClothLambertScale * NdotL * occlusion;
 
     half clothTerm = rim + inner + lambert;
     //clothTerm /= _ClothRimScale + _ClothInnerScale + _ClothLambertScale;
@@ -340,14 +382,7 @@ half3 EnvironmentBRDF(BRDFData brdfData, half3 indirectDiffuse, half3 indirectSp
 #endif
 
 #ifdef _DIFFUSEMODEL_SKIN
-    half3 lumaVec = half3(0.299, 0.587, 0.114);
-
-    half indirectDiffuseLuma = dot (lumaVec, indirectDiffuse);
-
-    half3 skinTerm = SkinTerm(indirectDiffuseLuma, _SkinCurvature);
-    half skinLuma = dot (lumaVec, skinTerm);
-
-    indirectDiffuse *= skinTerm / skinLuma;
+    indirectDiffuse = SkinTermIndirect(indirectDiffuse, brdfData.curvature);
 #endif
 
     half3 c = indirectDiffuse * brdfData.diffuse;
@@ -394,7 +429,7 @@ half3 DirectBDRFSpec(BRDFData brdfData, half3 normalWS, half3 lightDirectionWS, 
 #endif
 
     half NdotL = saturate(dot(normalWS, lightDirectionWS));
-    half3 color = specularTerm * brdfData.specular * NdotL;
+    half3 color = specularTerm * brdfData.specular * NdotL * brdfData.occlusion;
     return color;
 #else
     return half3(0, 0, 0);
@@ -405,11 +440,11 @@ half3 DirectBDRFDiffuse(BRDFData brdfData, half3 normalWS, half3 lightDirectionW
 {
     half3 diffuseTerm;
 #ifdef _DIFFUSEMODEL_CLOTH
-    diffuseTerm = ClothTerm(normalWS, lightDirectionWS, viewDirectionWS);
+    diffuseTerm = ClothTerm(normalWS, lightDirectionWS, viewDirectionWS, brdfData.occlusion);
 #elif _DIFFUSEMODEL_SKIN
-    diffuseTerm = SkinTerm(normalWS, lightDirectionWS, _SkinCurvature);
+    diffuseTerm = SkinTerm(normalWS, lightDirectionWS, brdfData.curvature, brdfData.occlusion);
 #else
-    diffuseTerm = saturate(dot(normalWS, lightDirectionWS));
+    diffuseTerm = saturate(dot(normalWS, lightDirectionWS)) * brdfData.occlusion;
 #endif
 
     return diffuseTerm * brdfData.diffuse;
@@ -581,9 +616,9 @@ half3 LightingDiffuse(half3 lightColor, half3 lightDir, half3 normal, half3 view
 {
     half3 lighting;
 #ifdef _DIFFUSEMODEL_CLOTH
-    lighting = ClothTerm(normal, lightDir, viewDir);
+    lighting = ClothTerm(normal, lightDir, viewDir, 1);
 #elif _DIFFUSEMODEL_SKIN
-    lighting = SkinTerm(normal, lightDir, _SkinCurvature);
+    lighting = SkinTerm(normal, lightDir, _SkinCurvature, 1);
 #else
     lighting = saturate(dot(normal, lightDir));
 #endif
@@ -637,10 +672,10 @@ half3 VertexLighting(float3 positionWS, half3 normalWS, half3 viewWS)
 //       Used by ShaderGraph and others builtin renderers                    //
 ///////////////////////////////////////////////////////////////////////////////
 half4 LightweightFragmentPBR(InputData inputData, half3 albedo, half metallic, half3 specular,
-    half smoothness, half occlusion, half3 emission, half alpha)
+    half smoothness, half occlusion, half3 emission, half alpha, half curvature)
 {
     BRDFData brdfData;
-    InitializeBRDFData(albedo, metallic, specular, smoothness, alpha, brdfData);
+    InitializeBRDFData(albedo, metallic, specular, smoothness, alpha, occlusion, curvature, brdfData);
 
     Light mainLight = GetMainLight();
     mainLight.attenuation = MainLightRealtimeShadowAttenuation(inputData.shadowCoord);

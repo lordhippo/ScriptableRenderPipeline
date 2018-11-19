@@ -155,7 +155,7 @@ half4 SpatmapFragment(VertexOutput IN) : SV_TARGET
 
     InputData inputData;
     InitializeInputData(IN, normalTS, inputData);
-    half4 color = LightweightFragmentPBR(inputData, albedo, metallic, specular, smoothness, /* occlusion */ 1.0, /* emission */ half3(0, 0, 0), alpha);
+    half4 color = LightweightFragmentPBR(inputData, albedo, metallic, specular, smoothness, /* occlusion */ 1.0, /* emission */ half3(0, 0, 0), alpha, /* curvature */0);
 
     SplatmapFinalColor(color, inputData.fogCoord);
 

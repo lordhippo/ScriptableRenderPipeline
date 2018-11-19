@@ -69,6 +69,7 @@ namespace UnityEditor
         private MaterialProperty clothLambertScale;
 
         private MaterialProperty skinCurvature;
+        private MaterialProperty skinCurvatureMap;
 
         private MaterialProperty workflowMode;
 
@@ -106,6 +107,7 @@ namespace UnityEditor
             clothLambertScale = FindProperty("_ClothLambertScale", properties);
 
             skinCurvature = FindProperty("_SkinCurvature", properties);
+            skinCurvatureMap = FindProperty("_SkinCurvatureMap", properties);
 
             workflowMode = FindProperty("_WorkflowMode", properties);
             albedoColor = FindProperty("_Color", properties);
@@ -252,7 +254,7 @@ namespace UnityEditor
             {
                 GUILayout.Label(Styles.skinProperties, EditorStyles.boldLabel);
 
-                m_MaterialEditor.ShaderProperty(skinCurvature, Styles.skinCurvatureText);
+                m_MaterialEditor.TexturePropertySingleLine(Styles.skinCurvatureText, skinCurvatureMap, skinCurvature);
             }
 
             GUILayout.Space(10);
@@ -368,6 +370,7 @@ namespace UnityEditor
             CoreUtils.SetKeyword(material, "_OCCLUSIONMAP", material.GetTexture("_OcclusionMap"));
             CoreUtils.SetKeyword(material, "_PARALLAXMAP", material.GetTexture("_ParallaxMap"));
             CoreUtils.SetKeyword(material, "_DETAIL_MULX2", material.GetTexture("_DetailAlbedoMap") || material.GetTexture("_DetailNormalMap"));
+            CoreUtils.SetKeyword(material, "_CURVATUREMAP", material.GetTexture("_SkinCurvatureMap"));
 
             // A material's GI flag internally keeps track of whether emission is enabled at all, it's enabled but has no effect
             // or is enabled and may be modified at runtime. This state depends on the values of the current flag and emissive color.

@@ -35,6 +35,7 @@ CBUFFER_END
 TEXTURE2D(_OcclusionMap);       SAMPLER(sampler_OcclusionMap);
 TEXTURE2D(_MetallicGlossMap);   SAMPLER(sampler_MetallicGlossMap);
 TEXTURE2D(_SpecGlossMap);       SAMPLER(sampler_SpecGlossMap);
+TEXTURE2D(_SkinCurvatureMap);   SAMPLER(sampler_SkinCurvatureMap);
 
 #ifdef _SPECULAR_SETUP
     #define SAMPLE_METALLICSPECULAR(uv) SAMPLE_TEXTURE2D_COLOR(_SpecGlossMap, sampler_SpecGlossMap, uv)
@@ -83,13 +84,26 @@ half SampleOcclusion(float2 uv)
 #ifdef _OCCLUSIONMAP
 // TODO: Controls things like these by exposing SHADER_QUALITY levels (low, medium, high)
 #if defined(SHADER_API_GLES)
-    return SAMPLE_TEXTURE2D(_OcclusionMap, sampler_OcclusionMap, uv).g;
+    return SAMPLE_TEXTURE2D_COLOR(_OcclusionMap, sampler_OcclusionMap, uv).g;
 #else
-    half occ = SAMPLE_TEXTURE2D(_OcclusionMap, sampler_OcclusionMap, uv).g;
+    half occ = SAMPLE_TEXTURE2D_COLOR(_OcclusionMap, sampler_OcclusionMap, uv).g;
     return LerpWhiteTo(occ, _OcclusionStrength);
 #endif
 #else
     return 1.0;
+#endif
+}
+
+half SampleCurvature(float2 uv)
+{
+#if _DIFFUSEMODEL_SKIN
+#ifdef _CURVATUREMAP
+    return SAMPLE_TEXTURE2D_COLOR(_SkinCurvatureMap, sampler_SkinCurvatureMap, uv).g * _SkinCurvature;
+#else
+    return _SkinCurvature;
+#endif
+#else
+    return 0;
 #endif
 }
 
@@ -117,6 +131,8 @@ inline void InitializeStandardLitSurfaceData(float2 uv, out SurfaceData outSurfa
     outSurfaceData.normalTS = SampleNormal(uv, TEXTURE2D_PARAM(_BumpMap, sampler_BumpMap), _BumpScale);
     outSurfaceData.occlusion = SampleOcclusion(uv);
     outSurfaceData.emission = SampleEmission(uv, _EmissionColor.rgb, TEXTURE2D_PARAM(_EmissionMap, sampler_EmissionMap));
+
+    outSurfaceData.curvature = SampleCurvature(uv);
 }
 
 #endif // LIGHTWEIGHT_INPUT_SURFACE_PBR_INCLUDED

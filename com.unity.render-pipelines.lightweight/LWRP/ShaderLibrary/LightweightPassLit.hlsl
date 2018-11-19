@@ -201,7 +201,7 @@ half4 LitPassFragment(LightweightVertexOutput IN) : SV_Target
     InputData inputData;
     InitializeInputData(IN, surfaceData.normalTS, inputData);
 
-    half4 color = LightweightFragmentPBR(inputData, surfaceData.albedo, surfaceData.metallic, surfaceData.specular, surfaceData.smoothness, surfaceData.occlusion, surfaceData.emission, surfaceData.alpha);
+    half4 color = LightweightFragmentPBR(inputData, surfaceData.albedo, surfaceData.metallic, surfaceData.specular, surfaceData.smoothness, surfaceData.occlusion, surfaceData.emission, surfaceData.alpha, surfaceData.curvature);
 
     ApplyFog(color.rgb, inputData.fogCoord);
 

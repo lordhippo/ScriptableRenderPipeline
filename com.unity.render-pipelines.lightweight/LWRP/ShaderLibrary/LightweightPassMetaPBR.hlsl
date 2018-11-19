@@ -9,7 +9,7 @@ half4 LightweightFragmentMeta(MetaVertexOuput i) : SV_Target
     InitializeStandardLitSurfaceData(i.uv, surfaceData);
 
     BRDFData brdfData;
-    InitializeBRDFData(surfaceData.albedo, surfaceData.metallic, surfaceData.specular, surfaceData.smoothness, surfaceData.alpha, brdfData);
+    InitializeBRDFData(surfaceData.albedo, surfaceData.metallic, surfaceData.specular, surfaceData.smoothness, surfaceData.alpha, surfaceData.occlusion, 0, brdfData);
 
     MetaInput o;
     o.Albedo = brdfData.diffuse + brdfData.specular * brdfData.roughness * 0.5;
