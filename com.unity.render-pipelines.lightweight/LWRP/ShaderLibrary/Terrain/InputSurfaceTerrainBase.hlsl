@@ -36,6 +36,7 @@ inline void InitializeStandardLitSurfaceData(float2 uv, out SurfaceData outSurfa
     outSurfaceData.normalTS = SampleNormal(uv, TEXTURE2D_PARAM(_BumpMap, sampler_BumpMap));
     outSurfaceData.occlusion = 1;
     outSurfaceData.emission = 0;
+    outSurfaceData.curvature = 0;
 }
 
 #endif // LIGHTWEIGHT_INPUT_SURFACE_TERRAIN_BASE_INCLUDED

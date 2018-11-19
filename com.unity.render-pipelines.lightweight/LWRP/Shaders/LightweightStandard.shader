@@ -14,6 +14,7 @@ Shader "LightweightPipeline/Standard (Physically Based)"
 
 		// Skin model specific parameters
         _SkinCurvature ("Skin Curvature", Range(0.0, 1.0)) = 0.5
+        _SkinCurvatureMap ("Skin Curvature Map", 2D) = "white" {}
 
         // Specular vs Metallic workflow
         [HideInInspector] _WorkflowMode("WorkflowMode", Float) = 1.0
@@ -106,6 +107,7 @@ Shader "LightweightPipeline/Standard (Physically Based)"
             #pragma shader_feature _METALLICSPECGLOSSMAP
             #pragma shader_feature _SMOOTHNESS_TEXTURE_ALBEDO_CHANNEL_A
             #pragma shader_feature _OCCLUSIONMAP
+            #pragma shader_feature _CURVATUREMAP
 
             #pragma shader_feature _SPECULARHIGHLIGHTS_OFF
             #pragma shader_feature _GLOSSYREFLECTIONS_OFF
